@@ -1,6 +1,6 @@
 {
   "discord": {
-    "token": "MTQ3MjM5MzE0Mzc2ODA1OTk4OQ.GflNMr.-g_20JISlk179mNBaHl5NoUYbXOCwCVNu6t5rc",
+    "token": "PUT_DISCORD_TOKEN_IN_ENV",
     "guild_id": "1471492941091573782",
     "prefix": "!"
   },

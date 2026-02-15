@@ -25,6 +25,10 @@ func RegisterWelcomeLeave(s *discordgo.Session) {
 			handleLeave(s, m)
 		})
 	}
+
+	s.AddHandler(func(s *discordgo.Session, m *discordgo.GuildMemberAdd) {
+		AssignJoinRole(s, m.GuildID, m.User.ID)
+	})
 }
 
 func handleWelcome(s *discordgo.Session, m *discordgo.GuildMemberAdd) {

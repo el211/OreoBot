@@ -15,6 +15,8 @@ func Commands(cfg *config.Config) []*discordgo.ApplicationCommand {
 	cmds = append(cmds, moderationCommands()...)
 	cmds = append(cmds, ticketCommands()...)
 	cmds = append(cmds, utilityCommands()...)
+	cmds = append(cmds, autoroleCommands()...)
+	cmds = append(cmds, giveawayCommands()...)
 	if cfg.Minecraft.Enabled {
 		cmds = append(cmds, minecraftCommands()...)
 	}
@@ -92,6 +94,13 @@ func handleSlashCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	case "play", "skip", "stop", "queue", "volume", "nowplaying", "pause", "resume":
 		handleMusicCommand(s, i, name)
 
+	case "joinrole":
+		handleJoinRoleCommand(s, i)
+	case "rolemenu":
+		handleRoleMenuCommand(s, i)
+	case "giveaway":
+		handleGiveawayCommand(s, i)
+
 	default:
 		log.Printf("Unknown command: %s", name)
 	}
@@ -99,6 +108,18 @@ func handleSlashCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	customID := i.MessageComponentData().CustomID
+
+	if strings.HasPrefix(customID, "rolemenu:") {
+		HandleRoleMenuButton(s, i)
+		return
+	}
+	if strings.HasPrefix(customID, "giveaway_enter:") {
+		HandleGiveawayEnter(s, i)
+		return
+	}
+	if strings.HasPrefix(customID, "giveaway_ended_") {
+		return
+	}
 
 	switch customID {
 	case "ticket_category_select":

@@ -137,6 +137,41 @@ type TicketSubcategory struct {
 	Description string `json:"description"`
 }
 
+type AutoRoleState struct {
+	Enabled bool   `json:"enabled"`
+	RoleID  string `json:"role_id"`
+}
+
+type RoleMenu struct {
+	ID           string          `json:"id"`
+	Title        string          `json:"title"`
+	Description  string          `json:"description"`
+	ChannelID    string          `json:"channel_id"`
+	MessageID    string          `json:"message_id"`
+	SingleSelect bool            `json:"single_select"`
+	Roles        []RoleMenuEntry `json:"roles"`
+}
+
+type RoleMenuEntry struct {
+	RoleID string `json:"role_id"`
+	Label  string `json:"label"`
+	Emoji  string `json:"emoji"`
+}
+
+type Giveaway struct {
+	ID         string          `json:"id"`
+	GuildID    string          `json:"guild_id"`
+	ChannelID  string          `json:"channel_id"`
+	MessageID  string          `json:"message_id"`
+	Prize      string          `json:"prize"`
+	Winners    int             `json:"winners"`
+	EndsAt     string          `json:"ends_at"` // RFC3339
+	HostID     string          `json:"host_id"`
+	Ended      bool            `json:"ended"`
+	WinnerIDs  []string        `json:"winner_ids"`
+	EntrantIDs map[string]bool `json:"entrant_ids"`
+}
+
 type GuildState struct {
 	mu       sync.RWMutex
 	filePath string
@@ -149,6 +184,11 @@ type GuildState struct {
 	TicketRuntime TicketRuntime `json:"ticket_runtime"`
 
 	Warnings map[string][]Warning `json:"warnings"`
+
+	// ── New fields ──────────────────────────────
+	AutoRole  AutoRoleState `json:"autorole"`
+	RoleMenus []RoleMenu    `json:"role_menus"`
+	Giveaways []Giveaway    `json:"giveaways"`
 }
 
 type TicketRuntime struct {
@@ -244,6 +284,8 @@ func LoadGuildState(guildID string) *GuildState {
 		TicketRuntime: TicketRuntime{
 			OpenTickets: make(map[string]Ticket),
 		},
+		RoleMenus: []RoleMenu{},
+		Giveaways: []Giveaway{},
 	}
 
 	data, err := os.ReadFile(path)
@@ -256,6 +298,12 @@ func LoadGuildState(guildID string) *GuildState {
 	}
 	if gs.TicketRuntime.OpenTickets == nil {
 		gs.TicketRuntime.OpenTickets = make(map[string]Ticket)
+	}
+	if gs.RoleMenus == nil {
+		gs.RoleMenus = []RoleMenu{}
+	}
+	if gs.Giveaways == nil {
+		gs.Giveaways = []Giveaway{}
 	}
 	return gs
 }

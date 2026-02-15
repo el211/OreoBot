@@ -14,6 +14,7 @@ func Commands(cfg *config.Config) []*discordgo.ApplicationCommand {
 	cmds := make([]*discordgo.ApplicationCommand, 0)
 	cmds = append(cmds, moderationCommands()...)
 	cmds = append(cmds, ticketCommands()...)
+	cmds = append(cmds, utilityCommands()...)
 	if cfg.Minecraft.Enabled {
 		cmds = append(cmds, minecraftCommands()...)
 	}
@@ -82,6 +83,11 @@ func handleSlashCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	case "mc":
 		handleMinecraftCommand(s, i)
+
+	case "say":
+		handleSay(s, i)
+	case "embed":
+		handleEmbed(s, i)
 
 	case "play", "skip", "stop", "queue", "volume", "nowplaying", "pause", "resume":
 		handleMusicCommand(s, i, name)

@@ -54,6 +54,7 @@ func main() {
 	}
 
 	handlers.Register(b.Session)
+	handlers.RegisterWelcomeLeave(b.Session)
 	b.Session.AddHandler(func(s *discordgo.Session, e *discordgo.VoiceStateUpdate) {
 		if s.State != nil && s.State.User != nil && e.UserID == s.State.User.ID {
 			music.UpdateVoiceState(e.GuildID, e.SessionID)

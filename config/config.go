@@ -3,18 +3,21 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"sync"
 )
 
 type Config struct {
-	Discord     DiscordConfig     `json:"discord"`
-	YouTube     YouTubeConfig     `json:"youtube"`
-	Database    DatabaseConfig    `json:"database"`
-	Minecraft   MinecraftConfig   `json:"minecraft"`
-	Permissions PermissionsConfig `json:"permissions"`
-	Music       MusicConfig       `json:"music"`
-	Moderation  ModerationConfig  `json:"moderation"`
-	Tickets     TicketsConfig     `json:"tickets"`
+	Discord     DiscordConfig      `json:"discord"`
+	YouTube     YouTubeConfig      `json:"youtube"`
+	Database    DatabaseConfig     `json:"database"`
+	Minecraft   MinecraftConfig    `json:"minecraft"`
+	Permissions PermissionsConfig  `json:"permissions"`
+	Music       MusicConfig        `json:"music"`
+	Welcome     WelcomeLeaveConfig `json:"welcome"`
+	Leave       WelcomeLeaveConfig `json:"leave"`
+	Moderation  ModerationConfig   `json:"moderation"`
+	Tickets     TicketsConfig      `json:"tickets"`
 }
 
 type DiscordConfig struct {
@@ -85,6 +88,21 @@ type ModerationConfig struct {
 	AutoMod       AutoModConfig `json:"auto_mod"`
 }
 
+type WelcomeLeaveConfig struct {
+	Enabled   bool        `json:"enabled"`
+	ChannelID string      `json:"channel_id"`
+	Embed     EmbedConfig `json:"embed"`
+}
+
+type EmbedConfig struct {
+	Colour       string `json:"colour"`
+	Title        string `json:"title"`
+	Message      string `json:"message"`
+	Thumbnail    string `json:"thumbnail"`
+	ImageEnabled bool   `json:"image_enabled"`
+	ImageURL     string `json:"image_url"`
+}
+
 type AutoModConfig struct {
 	Enabled         bool `json:"enabled"`
 	MaxMentions     int  `json:"max_mentions"`
@@ -97,7 +115,7 @@ type TicketsConfig struct {
 	Enabled         bool             `json:"enabled"`
 	PanelChannel    string           `json:"panel_channel"`
 	LogChannel      string           `json:"log_channel"`
-	StaffRole       string           `json:"staff_role"`
+	StaffRoles      string           `json:"staff_roles"`
 	DiscordCategory string           `json:"discord_category"`
 	MaxOpenPerUser  int              `json:"max_open_per_user"`
 	Categories      []TicketCategory `json:"categories"`
@@ -108,6 +126,7 @@ type TicketCategory struct {
 	Name          string              `json:"name"`
 	Emoji         string              `json:"emoji"`
 	Description   string              `json:"description"`
+	StaffRoles    string              `json:"staff_role"`
 	Subcategories []TicketSubcategory `json:"subcategories"`
 }
 
@@ -135,7 +154,7 @@ type GuildState struct {
 type TicketRuntime struct {
 	PanelChannelOverride    string            `json:"panel_channel_override,omitempty"`
 	LogChannelOverride      string            `json:"log_channel_override,omitempty"`
-	StaffRoleOverride       string            `json:"staff_role_override,omitempty"`
+	StaffRolesOverride      string            `json:"staff_roles_override,omitempty"`
 	DiscordCategoryOverride string            `json:"discord_category_override,omitempty"`
 	PanelMessageID          string            `json:"panel_message_id"`
 	TicketCounter           int               `json:"ticket_counter"`
@@ -275,11 +294,34 @@ func EffectiveTicketLogChannel(cfg *Config, gs *GuildState) string {
 	return cfg.Tickets.LogChannel
 }
 
-func EffectiveTicketStaffRole(cfg *Config, gs *GuildState) string {
-	if gs.TicketRuntime.StaffRoleOverride != "" {
-		return gs.TicketRuntime.StaffRoleOverride
+func EffectiveTicketStaffRoles(cfg *Config, gs *GuildState) []string {
+	raw := cfg.Tickets.StaffRoles
+	if gs.TicketRuntime.StaffRolesOverride != "" {
+		raw = gs.TicketRuntime.StaffRolesOverride
 	}
-	return cfg.Tickets.StaffRole
+	return ParseRoleIDs(raw)
+}
+
+func CategoryStaffRoles(cat *TicketCategory, fallback []string) []string {
+	if cat.StaffRoles != "" {
+		return ParseRoleIDs(cat.StaffRoles)
+	}
+	return fallback
+}
+
+func ParseRoleIDs(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	ids := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			ids = append(ids, p)
+		}
+	}
+	return ids
 }
 
 func EffectiveTicketCategory(cfg *Config, gs *GuildState) string {

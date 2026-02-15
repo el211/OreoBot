@@ -23,7 +23,7 @@ func ticketCommands() []*discordgo.ApplicationCommand {
 					Type: discordgo.ApplicationCommandOptionSubCommand,
 					Options: []*discordgo.ApplicationCommandOption{
 						{Type: discordgo.ApplicationCommandOptionChannel, Name: "channel", Description: "Channel to post the ticket panel in", Required: true},
-						{Type: discordgo.ApplicationCommandOptionRole, Name: "staff-role", Description: "Role that can see tickets", Required: true},
+						{Type: discordgo.ApplicationCommandOptionString, Name: "staff-roles", Description: "Staff role ID(s), comma-separated", Required: true},
 						{Type: discordgo.ApplicationCommandOptionChannel, Name: "log-channel", Description: "Channel for ticket logs"},
 						{Type: discordgo.ApplicationCommandOptionChannel, Name: "category", Description: "Discord category for ticket channels"},
 					},
@@ -122,7 +122,7 @@ func handleTicketSetup(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 
 	gs.Lock()
 	gs.TicketRuntime.PanelChannelOverride = om["channel"].ChannelValue(s).ID
-	gs.TicketRuntime.StaffRoleOverride = om["staff-role"].RoleValue(s, i.GuildID).ID
+	gs.TicketRuntime.StaffRolesOverride = om["staff-roles"].StringValue()
 	if lc, ok := om["log-channel"]; ok {
 		gs.TicketRuntime.LogChannelOverride = lc.ChannelValue(s).ID
 	}
@@ -354,7 +354,7 @@ func handleTicketConfigCmd(s *discordgo.Session, i *discordgo.InteractionCreate)
 	sb.WriteString(fmt.Sprintf("Enabled: `%v`\n", cfg.Tickets.Enabled))
 	sb.WriteString(fmt.Sprintf("Panel Channel: `%s`\n", cfg.Tickets.PanelChannel))
 	sb.WriteString(fmt.Sprintf("Log Channel: `%s`\n", cfg.Tickets.LogChannel))
-	sb.WriteString(fmt.Sprintf("Staff Role: `%s`\n", cfg.Tickets.StaffRole))
+	sb.WriteString(fmt.Sprintf("Staff Roles: `%s`\n", cfg.Tickets.StaffRoles))
 	sb.WriteString(fmt.Sprintf("Discord Category: `%s`\n", cfg.Tickets.DiscordCategory))
 	sb.WriteString(fmt.Sprintf("Max Open Per User: `%d`\n", cfg.Tickets.MaxOpenPerUser))
 	sb.WriteString(fmt.Sprintf("Config Categories: `%d`\n\n", len(cfg.Tickets.Categories)))
@@ -362,13 +362,17 @@ func handleTicketConfigCmd(s *discordgo.Session, i *discordgo.InteractionCreate)
 	sb.WriteString("__Runtime Overrides:__\n")
 	sb.WriteString(fmt.Sprintf("Panel Channel: `%s`\n", gs.TicketRuntime.PanelChannelOverride))
 	sb.WriteString(fmt.Sprintf("Log Channel: `%s`\n", gs.TicketRuntime.LogChannelOverride))
-	sb.WriteString(fmt.Sprintf("Staff Role: `%s`\n", gs.TicketRuntime.StaffRoleOverride))
+	sb.WriteString(fmt.Sprintf("Staff Roles: `%s`\n", gs.TicketRuntime.StaffRolesOverride))
 	sb.WriteString(fmt.Sprintf("Extra Categories: `%d`\n", len(gs.TicketRuntime.ExtraCategories)))
 	sb.WriteString(fmt.Sprintf("Open Tickets: `%d`\n\n", len(gs.TicketRuntime.OpenTickets)))
 
 	sb.WriteString("__Effective (merged) Categories:__\n")
 	for _, cat := range categories {
-		sb.WriteString(fmt.Sprintf("• %s **%s** (`%s`)\n", cat.Emoji, cat.Name, cat.ID))
+		staffInfo := ""
+		if cat.StaffRoles != "" {
+			staffInfo = fmt.Sprintf(" [staff: `%s`]", cat.StaffRoles)
+		}
+		sb.WriteString(fmt.Sprintf("• %s **%s** (`%s`)%s\n", cat.Emoji, cat.Name, cat.ID, staffInfo))
 		for _, sub := range cat.Subcategories {
 			sb.WriteString(fmt.Sprintf("   ↳ %s %s (`%s`)\n", sub.Emoji, sub.Name, sub.ID))
 		}
@@ -475,8 +479,21 @@ func createTicket(s *discordgo.Session, i *discordgo.InteractionCreate, catID, s
 	gs.Unlock()
 
 	channelName := fmt.Sprintf("ticket-%04d", num)
-	staffRole := config.EffectiveTicketStaffRole(cfg, gs)
 	discordCat := config.EffectiveTicketCategory(cfg, gs)
+
+	// Determine staff roles: per-category first, then global fallback
+	globalRoles := config.EffectiveTicketStaffRoles(cfg, gs)
+	categories := config.MergedTicketCategories(cfg, gs)
+	var staffRoles []string
+	for idx := range categories {
+		if categories[idx].ID == catID {
+			staffRoles = config.CategoryStaffRoles(&categories[idx], globalRoles)
+			break
+		}
+	}
+	if len(staffRoles) == 0 {
+		staffRoles = globalRoles
+	}
 
 	overwrites := []*discordgo.PermissionOverwrite{
 		{ID: i.GuildID, Type: discordgo.PermissionOverwriteTypeRole, Deny: discordgo.PermissionViewChannel},
@@ -486,9 +503,9 @@ func createTicket(s *discordgo.Session, i *discordgo.InteractionCreate, catID, s
 			Allow: discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory,
 		},
 	}
-	if staffRole != "" {
+	for _, roleID := range staffRoles {
 		overwrites = append(overwrites, &discordgo.PermissionOverwrite{
-			ID:    staffRole,
+			ID:    roleID,
 			Type:  discordgo.PermissionOverwriteTypeRole,
 			Allow: discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory | discordgo.PermissionManageMessages,
 		})
@@ -505,7 +522,6 @@ func createTicket(s *discordgo.Session, i *discordgo.InteractionCreate, catID, s
 		return
 	}
 
-	categories := config.MergedTicketCategories(cfg, gs)
 	catName := catID
 	subName := subID
 	for _, c := range categories {
@@ -545,8 +561,8 @@ func createTicket(s *discordgo.Session, i *discordgo.InteractionCreate, catID, s
 	}
 
 	pingContent := fmt.Sprintf("<@%s>", userID)
-	if staffRole != "" {
-		pingContent += fmt.Sprintf(" | <@&%s>", staffRole)
+	for _, roleID := range staffRoles {
+		pingContent += fmt.Sprintf(" | <@&%s>", roleID)
 	}
 
 	_, _ = s.ChannelMessageSendComplex(ch.ID, &discordgo.MessageSend{

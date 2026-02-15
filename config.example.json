@@ -1,0 +1,140 @@
+{
+  "discord": {
+    "token": "MTQ3MjM5MzE0Mzc2ODA1OTk4OQ.GflNMr.-g_20JISlk179mNBaHl5NoUYbXOCwCVNu6t5rc",
+    "guild_id": "1471492941091573782",
+    "prefix": "!"
+  },
+
+  "youtube": {
+    "api_key": "YOUR_YOUTUBE_API_KEY_HERE"
+  },
+
+  "database": {
+    "driver": "sqlite",
+    "sqlite": {
+      "path": "data/bot.db"
+    },
+    "mongodb": {
+      "uri": "mongodb://localhost:27017",
+      "database": "discord_bot"
+    }
+  },
+
+  "minecraft": {
+    "enabled": false,
+    "rcon_ip": "localhost",
+    "rcon_port": 25575,
+    "rcon_password": "your_rcon_password"
+  },
+
+  "permissions": {
+    "admin_roles": ["Admin", "Owner"],
+    "moderator_roles": ["Moderator", "Mod"],
+    "dj_roles": ["DJ", "Music"]
+  },
+
+  "music": {
+    "enabled": true,
+    "backend": "lavalink",
+    "max_queue_size": 100,
+    "max_song_duration": 600,
+    "allow_playlists": true,
+    "default_volume": 50,
+    "direct": {
+      "ytdlp_path": "./yt-dlp",
+      "ffmpeg_path": "ffmpeg"
+    },
+    "lavalink": {
+      "host": "88.99.150.35",
+      "port": 25615,
+      "password": "youshallnotpass",
+      "secure": false
+    }
+  },
+
+  "welcome": {
+    "enabled": true,
+    "channel_id": "PUT_WELCOME_CHANNEL_ID_HERE",
+    "embed": {
+      "colour": "#f74343",
+      "title": "Welcome to Oreo Studios !",
+      "message": ":smile: Welcome to you %joined_user%, on Oreo Studios !",
+      "thumbnail": "BOT",
+      "image_enabled": true,
+      "image_url": "https://media.discordapp.net/attachments/1321509685031075914/1458092765333295238/oreostudios.png?ex=695e6235&is=695d10b5&hm=b7fbbbbdf5aa29977947913235d8094d17429f8f81067429bfd7c56e870b18fa&=&format=webp&quality=lossless"
+    }
+  },
+
+  "leave": {
+    "enabled": true,
+    "channel_id": "PUT_LEAVE_CHANNEL_ID_HERE",
+    "embed": {
+      "colour": "#f74343",
+      "title": "Goodbye!",
+      "message": ":slight_frown: %joined_user% has recently dropped out!",
+      "thumbnail": "BOT",
+      "image_enabled": false,
+      "image_url": "https://animagelink.png/"
+    }
+  },
+
+  "moderation": {
+    "mod_log_channel": "1472404400868950026",
+    "mute_role": "1471492941091573785",
+    "auto_mod": {
+      "enabled": true,
+      "max_mentions": 5,
+      "max_lines": 30,
+      "anti_spam_seconds": 5,
+      "anti_spam_count": 5
+    }
+  },
+
+  "tickets": {
+    "enabled": true,
+    "panel_channel": "1472400657930518578",
+    "log_channel": "1472400769998127204",
+    "staff_roles": "1471492941515325557",
+    "discord_category": "1472400522140188794",
+    "max_open_per_user": 3,
+    "categories": [
+      {
+        "id": "smp",
+        "name": "SMP",
+        "staff_role": "1471492941515325557 , 471492941515325557 , 471492941515325557",
+        "emoji": "🛠️",
+        "description": "En rapport avec AskaWild SMP",
+        "subcategories": [
+          {
+            "id": "connexion",
+            "name": "Connexion",
+            "emoji": "🔧",
+            "description": "Connexion et Bug"
+          },
+          {
+            "id": "mc",
+            "name": "Minecraft",
+            "emoji": "👤",
+            "description": "Question sur Minecraft"
+          }
+        ]
+      },
+      {
+        "id": "discord",
+        "name": "Discord",
+        "staff_role": "1471492941515325557 , 471492941515325557 , 471492941515325557",
+        "emoji": "💰",
+        "description": "Tout ce qu'il ya en relation avec discord",
+        "subcategories": []
+      },
+      {
+        "id": "partenaire",
+        "name": "Partenaire",
+        "staff_role": "1471492941515325557 , 471492941515325557 , 471492941515325557",
+        "emoji": "💡",
+        "description": "Suggestions and feedback",
+        "subcategories": []
+      }
+    ]
+  }
+}

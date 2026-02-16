@@ -59,8 +59,7 @@ func autoroleCommands() []*discordgo.ApplicationCommand {
 					Options: []*discordgo.ApplicationCommandOption{
 						{Type: discordgo.ApplicationCommandOptionString, Name: "menu_id", Description: "Menu ID (from /rolemenu list)", Required: true},
 						{Type: discordgo.ApplicationCommandOptionRole, Name: "role", Description: "Role to add", Required: true},
-						{Type: discordgo.ApplicationCommandOptionString, Name: "label", Description: "Button label (e.g. Male, Female, +18, -18)", Required: true},
-						{Type: discordgo.ApplicationCommandOptionString, Name: "emoji", Description: "Button emoji (optional, e.g. 🧑)"},
+						{Type: discordgo.ApplicationCommandOptionString, Name: "label", Description: "Button label — include emoji here if you want (e.g. 🇫🇷 Français)", Required: true},
 					},
 				},
 				{
@@ -127,6 +126,7 @@ func handleJoinRoleCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 	}
 }
 
+// AssignJoinRole is called from welcome.go when a member joins.
 func AssignJoinRole(s *discordgo.Session, guildID, userID string) {
 	gs := storage.GetGuild(guildID)
 	gs.Lock()
@@ -198,10 +198,6 @@ func handleRoleMenuAdd(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 	menuID := om["menu_id"].StringValue()
 	role := om["role"].RoleValue(s, i.GuildID)
 	label := om["label"].StringValue()
-	emoji := ""
-	if e, ok := om["emoji"]; ok {
-		emoji = e.StringValue()
-	}
 
 	gs := storage.GetGuild(i.GuildID)
 	gs.Lock()
@@ -216,7 +212,6 @@ func handleRoleMenuAdd(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 			gs.RoleMenus[idx].Roles = append(gs.RoleMenus[idx].Roles, config.RoleMenuEntry{
 				RoleID: role.ID,
 				Label:  label,
-				Emoji:  emoji,
 			})
 			found = true
 			break
@@ -427,9 +422,6 @@ func buildRoleMenuComponents(menu *config.RoleMenu) []discordgo.MessageComponent
 			Label:    r.Label,
 			Style:    discordgo.PrimaryButton,
 			CustomID: fmt.Sprintf("rolemenu:%s:%s", menu.ID, r.RoleID),
-		}
-		if r.Emoji != "" {
-			btn.Emoji = &discordgo.ComponentEmoji{Name: r.Emoji}
 		}
 		currentRow = append(currentRow, btn)
 

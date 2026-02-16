@@ -271,6 +271,7 @@ func handleTicketPanel(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		for _, sub := range cat.Subcategories {
 			desc.WriteString(fmt.Sprintf("   ↳ %s %s — %s\n", sub.Emoji, sub.Name, sub.Description))
 		}
+		desc.WriteString("\n")
 	}
 
 	embed := &discordgo.MessageEmbed{

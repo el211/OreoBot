@@ -67,8 +67,8 @@ func handleMinecraftCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 	if RCONClient == nil {
 		respond(s, i, "RCON client not initialised.", true)
 		return
-	}
 
+	}
 	sub := i.ApplicationCommandData().Options[0]
 	switch sub.Name {
 	case "status":

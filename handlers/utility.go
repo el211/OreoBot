@@ -49,7 +49,6 @@ func handleSay(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	ch := opts["channel"].ChannelValue(s)
 	msg := opts["message"].StringValue()
 
-	// Replace literal \n with actual newlines
 	msg = strings.ReplaceAll(msg, "\\n", "\n")
 
 	_, err := s.ChannelMessageSend(ch.ID, msg)

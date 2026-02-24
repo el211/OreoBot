@@ -1,18 +1,17 @@
 package main
 
 import (
-	"flag"
-	"log"
-	"os"
-	"os/signal"
-	"syscall"
-
 	"discord-bot/bot"
 	"discord-bot/config"
 	"discord-bot/handlers"
 	"discord-bot/minecraft"
 	"discord-bot/music"
 	"discord-bot/storage"
+	"flag"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -39,6 +38,9 @@ func main() {
 	}
 
 	if cfg.Minecraft.Enabled {
+
+		handlers.InitMCLinkStore()
+
 		rcon := minecraft.NewClient(cfg.Minecraft.RCONAddress, cfg.Minecraft.RCONPort, cfg.Minecraft.RCONPassword)
 		if err := rcon.Connect(); err != nil {
 			log.Printf("WARNING: Minecraft RCON connection failed: %v (commands will retry on use)", err)
@@ -55,6 +57,7 @@ func main() {
 
 	handlers.Register(b.Session)
 	handlers.RegisterWelcomeLeave(b.Session)
+
 	b.Session.AddHandler(func(s *discordgo.Session, e *discordgo.VoiceStateUpdate) {
 		if s.State != nil && s.State.User != nil && e.UserID == s.State.User.ID {
 			music.UpdateVoiceState(e.GuildID, e.SessionID)
@@ -69,6 +72,24 @@ func main() {
 		log.Fatalf("Failed to start bot: %v", err)
 	}
 	defer b.Stop()
+
+	var guildID string
+	if cfg.Discord.GuildID != "" {
+		guildID = cfg.Discord.GuildID
+	} else if b.Session.State != nil && len(b.Session.State.Guilds) > 0 {
+		guildID = b.Session.State.Guilds[0].ID
+	}
+
+	if guildID != "" {
+		gs := storage.GetGuild(guildID)
+		handlers.RestoreGiveawayTimers(b.Session, gs)
+		log.Println("Giveaway timers restored.")
+	}
+
+	if cfg.Minecraft.Enabled {
+
+		handlers.StartLinkPoller(b.Session, guildID)
+	}
 
 	if cfg.Music.Enabled {
 		mgr, err := music.NewManager(b.Session, &cfg.Music)

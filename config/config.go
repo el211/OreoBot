@@ -50,6 +50,8 @@ type MinecraftConfig struct {
 	RCONAddress  string `json:"rcon_ip"`
 	RCONPort     int    `json:"rcon_port"`
 	RCONPassword string `json:"rcon_password"`
+
+	LinkBackend string `json:"link_backend"`
 }
 
 type PermissionsConfig struct {
@@ -185,7 +187,6 @@ type GuildState struct {
 
 	Warnings map[string][]Warning `json:"warnings"`
 
-	// ── New fields ──────────────────────────────
 	AutoRole  AutoRoleState `json:"autorole"`
 	RoleMenus []RoleMenu    `json:"role_menus"`
 	Giveaways []Giveaway    `json:"giveaways"`

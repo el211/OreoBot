@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"discord-bot/config"
@@ -33,6 +34,11 @@ func autoroleCommands() []*discordgo.ApplicationCommand {
 				{
 					Name:        "status",
 					Description: "Show the current join role configuration",
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+				},
+				{
+					Name:        "check",
+					Description: "Check if the bot can assign the auto-role (permission check)",
 					Type:        discordgo.ApplicationCommandOptionSubCommand,
 				},
 			},
@@ -101,11 +107,17 @@ func handleJoinRoleCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 	case "set":
 		om := subOptMap(sub.Options)
 		role := om["role"].RoleValue(s, i.GuildID)
+
+		if warning := checkBotRoleHierarchy(s, i.GuildID, role); warning != "" {
+			respond(s, i, fmt.Sprintf("⚠️ Auto-role set, but there may be an issue:\n%s", warning), true)
+		} else {
+			respond(s, i, fmt.Sprintf("✅ Join role set to <@&%s>. Every new member will receive this role automatically.", role.ID), true)
+		}
+
 		gs.Lock()
 		gs.AutoRole = config.AutoRoleState{Enabled: true, RoleID: role.ID}
 		gs.Unlock()
 		_ = gs.Save()
-		respond(s, i, fmt.Sprintf("✅ Join role set to <@&%s>. Every new member will receive this role automatically.", role.ID), true)
 
 	case "disable":
 		gs.Lock()
@@ -123,10 +135,64 @@ func handleJoinRoleCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 		} else {
 			respond(s, i, "🎭 Auto-role on join is **disabled**.", true)
 		}
+
+	case "check":
+		gs.Lock()
+		ar := gs.AutoRole
+		gs.Unlock()
+		if !ar.Enabled || ar.RoleID == "" {
+			respond(s, i, "ℹ️ Auto-role is currently disabled. Set one with `/joinrole set`.", true)
+			return
+		}
+		role, err := s.State.Role(i.GuildID, ar.RoleID)
+		if err != nil {
+			respond(s, i, fmt.Sprintf("❌ Could not find the configured role (`%s`). It may have been deleted. Reset with `/joinrole set`.", ar.RoleID), true)
+			return
+		}
+		if w := checkBotRoleHierarchy(s, i.GuildID, role); w != "" {
+			respond(s, i, "❌ **Problem detected:**\n"+w, true)
+		} else {
+			respond(s, i, fmt.Sprintf("✅ Everything looks good! The bot can assign <@&%s> to new members.", ar.RoleID), true)
+		}
 	}
 }
 
-// AssignJoinRole is called from welcome.go when a member joins.
+func checkBotRoleHierarchy(s *discordgo.Session, guildID string, targetRole *discordgo.Role) string {
+	botID := s.State.User.ID
+
+	botMember, err := s.GuildMember(guildID, botID)
+	if err != nil {
+		return fmt.Sprintf("Could not fetch bot member data: %v", err)
+	}
+
+	allRoles, err := s.GuildRoles(guildID)
+	if err != nil {
+		return fmt.Sprintf("Could not fetch guild roles: %v", err)
+	}
+
+	roleMap := make(map[string]*discordgo.Role, len(allRoles))
+	for _, r := range allRoles {
+		roleMap[r.ID] = r
+	}
+
+	botHighestPos := 0
+	for _, rid := range botMember.Roles {
+		if r, ok := roleMap[rid]; ok && r.Position > botHighestPos {
+			botHighestPos = r.Position
+		}
+	}
+
+	if targetRole.Position >= botHighestPos {
+		return fmt.Sprintf(
+			"<@&%s> (position %d) is **equal to or above** the bot's highest role (position %d).\n"+
+				"👉 Move the bot's role **above** <@&%s> in Server Settings → Roles.",
+			targetRole.ID, targetRole.Position,
+			botHighestPos, targetRole.ID,
+		)
+	}
+	return ""
+}
+
 func AssignJoinRole(s *discordgo.Session, guildID, userID string) {
 	gs := storage.GetGuild(guildID)
 	gs.Lock()
@@ -136,7 +202,14 @@ func AssignJoinRole(s *discordgo.Session, guildID, userID string) {
 	if !ar.Enabled || ar.RoleID == "" {
 		return
 	}
-	_ = s.GuildMemberRoleAdd(guildID, userID, ar.RoleID)
+
+	if err := s.GuildMemberRoleAdd(guildID, userID, ar.RoleID); err != nil {
+		log.Printf("[AutoRole] FAILED to assign role %s to user %s in guild %s: %v",
+			ar.RoleID, userID, guildID, err)
+		log.Printf("[AutoRole] TIP: Make sure the bot's role is ABOVE <@&%s> in the role list, and the bot has 'Manage Roles' permission.", ar.RoleID)
+	} else {
+		log.Printf("[AutoRole] Assigned role %s to user %s in guild %s", ar.RoleID, userID, guildID)
+	}
 }
 
 func handleRoleMenuCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {

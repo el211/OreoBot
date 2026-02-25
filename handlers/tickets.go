@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"discord-bot/config"
+	"discord-bot/lang"
 	"discord-bot/storage"
 
 	"github.com/bwmarrin/discordgo"
@@ -132,7 +133,7 @@ func handleTicketSetup(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 	gs.Unlock()
 	_ = gs.Save()
 
-	respond(s, i, " Ticket system configured! These overrides take priority over config.json.\nUse `/ticket addcategory` to add more categories, then `/ticket panel` to post the panel.", true)
+	respond(s, i, lang.T("ticket_setup_done"), true)
 }
 
 func handleTicketAddCategory(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
@@ -151,7 +152,7 @@ func handleTicketAddCategory(s *discordgo.Session, i *discordgo.InteractionCreat
 	gs.Unlock()
 	_ = gs.Save()
 
-	respond(s, i, fmt.Sprintf(" Category **%s %s** added (runtime). Run `/ticket panel` to refresh.", cat.Emoji, cat.Name), true)
+	respond(s, i, lang.T("ticket_category_added", "emoji", cat.Emoji, "name", cat.Name), true)
 }
 
 func handleTicketRemoveCategory(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
@@ -173,10 +174,10 @@ func handleTicketRemoveCategory(s *discordgo.Session, i *discordgo.InteractionCr
 	_ = gs.Save()
 
 	if !found {
-		respond(s, i, fmt.Sprintf("Runtime category `%s` not found. (Config categories can only be removed from config.json.)", id), true)
+		respond(s, i, lang.T("ticket_category_not_found_runtime", "id", id), true)
 		return
 	}
-	respond(s, i, fmt.Sprintf("🗑️ Category `%s` removed. Run `/ticket panel` to refresh.", id), true)
+	respond(s, i, lang.T("ticket_category_removed", "id", id), true)
 }
 
 func handleTicketAddSubcategory(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
@@ -205,16 +206,16 @@ func handleTicketAddSubcategory(s *discordgo.Session, i *discordgo.InteractionCr
 	if !found {
 		for _, c := range storage.Cfg.Tickets.Categories {
 			if c.ID == catID {
-				respond(s, i, fmt.Sprintf("Category `%s` is defined in config.json. Edit config.json to add subcategories to it, or create a runtime category with `/ticket addcategory`.", catID), true)
+				respond(s, i, lang.T("ticket_category_config_only", "id", catID), true)
 				return
 			}
 		}
-		respond(s, i, fmt.Sprintf("Category `%s` not found.", catID), true)
+		respond(s, i, lang.T("ticket_category_not_found", "id", catID), true)
 		return
 	}
 
 	_ = gs.Save()
-	respond(s, i, fmt.Sprintf("Subcategory **%s %s** added under `%s`. Run `/ticket panel` to refresh.", sub.Emoji, sub.Name, catID), true)
+	respond(s, i, lang.T("ticket_subcategory_added", "emoji", sub.Emoji, "name", sub.Name, "parent", catID), true)
 }
 
 func handleTicketRemoveSubcategory(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
@@ -242,10 +243,10 @@ func handleTicketRemoveSubcategory(s *discordgo.Session, i *discordgo.Interactio
 	_ = gs.Save()
 
 	if !found {
-		respond(s, i, " Subcategory not found in runtime categories.", true)
+		respond(s, i, lang.T("ticket_subcategory_not_found"), true)
 		return
 	}
-	respond(s, i, fmt.Sprintf("🗑️ Subcategory `%s` removed. Run `/ticket panel` to refresh.", subID), true)
+	respond(s, i, lang.T("ticket_subcategory_removed", "id", subID), true)
 }
 
 func handleTicketPanel(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -254,18 +255,18 @@ func handleTicketPanel(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	panelCh := config.EffectiveTicketPanelChannel(cfg, gs)
 	if panelCh == "" {
-		respond(s, i, " No panel channel set. Either set `tickets.panel_channel` in config.json or run `/ticket setup`.", true)
+		respond(s, i, lang.T("ticket_no_panel_channel"), true)
 		return
 	}
 
 	categories := config.MergedTicketCategories(cfg, gs)
 	if len(categories) == 0 {
-		respond(s, i, " No categories configured. Add them in config.json or with `/ticket addcategory`.", true)
+		respond(s, i, lang.T("ticket_no_categories"), true)
 		return
 	}
 
 	var desc strings.Builder
-	desc.WriteString("Select a category below to open a ticket.\n\n")
+	desc.WriteString(lang.T("ticket_panel_description") + "\n\n")
 	for _, cat := range categories {
 		desc.WriteString(fmt.Sprintf("%s **%s** — %s\n", cat.Emoji, cat.Name, cat.Description))
 		for _, sub := range cat.Subcategories {
@@ -275,7 +276,7 @@ func handleTicketPanel(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       "🎫 Support Tickets",
+		Title:       lang.T("ticket_panel_title"),
 		Description: desc.String(),
 		Color:       0x5865F2,
 		Footer:      &discordgo.MessageEmbedFooter{Text: "Click the menu below to open a ticket"},
@@ -307,7 +308,7 @@ func handleTicketPanel(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		},
 	})
 	if err != nil {
-		respond(s, i, fmt.Sprintf("Failed to send panel: %v", err), true)
+		respond(s, i, lang.T("ticket_panel_send_failed", "error", err.Error()), true)
 		return
 	}
 
@@ -320,7 +321,7 @@ func handleTicketPanel(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	gs.Unlock()
 	_ = gs.Save()
 
-	respond(s, i, "Ticket panel posted!", true)
+	respond(s, i, lang.T("ticket_panel_posted"), true)
 }
 
 func handleTicketList(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -328,7 +329,7 @@ func handleTicketList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	tickets := gs.TicketRuntime.OpenTickets
 
 	if len(tickets) == 0 {
-		respond(s, i, "No open tickets.", true)
+		respond(s, i, lang.T("ticket_no_open"), true)
 		return
 	}
 
@@ -359,14 +360,12 @@ func handleTicketConfigCmd(s *discordgo.Session, i *discordgo.InteractionCreate)
 	sb.WriteString(fmt.Sprintf("Discord Category: `%s`\n", cfg.Tickets.DiscordCategory))
 	sb.WriteString(fmt.Sprintf("Max Open Per User: `%d`\n", cfg.Tickets.MaxOpenPerUser))
 	sb.WriteString(fmt.Sprintf("Config Categories: `%d`\n\n", len(cfg.Tickets.Categories)))
-
 	sb.WriteString("__Runtime Overrides:__\n")
 	sb.WriteString(fmt.Sprintf("Panel Channel: `%s`\n", gs.TicketRuntime.PanelChannelOverride))
 	sb.WriteString(fmt.Sprintf("Log Channel: `%s`\n", gs.TicketRuntime.LogChannelOverride))
 	sb.WriteString(fmt.Sprintf("Staff Roles: `%s`\n", gs.TicketRuntime.StaffRolesOverride))
 	sb.WriteString(fmt.Sprintf("Extra Categories: `%d`\n", len(gs.TicketRuntime.ExtraCategories)))
 	sb.WriteString(fmt.Sprintf("Open Tickets: `%d`\n\n", len(gs.TicketRuntime.OpenTickets)))
-
 	sb.WriteString("__Effective (merged) Categories:__\n")
 	for _, cat := range categories {
 		staffInfo := ""
@@ -399,7 +398,7 @@ func handleTicketCategorySelect(s *discordgo.Session, i *discordgo.InteractionCr
 		}
 	}
 	if cat == nil {
-		respond(s, i, "Category not found.", true)
+		respond(s, i, lang.T("ticket_category_select_not_found"), true)
 		return
 	}
 
@@ -470,7 +469,10 @@ func createTicket(s *discordgo.Session, i *discordgo.InteractionCreate, catID, s
 		}
 	}
 	if openCount >= maxOpen {
-		respond(s, i, fmt.Sprintf("You already have %d open ticket(s) (max %d).", openCount, maxOpen), true)
+		respond(s, i, lang.T("ticket_max_open",
+			"count", fmt.Sprintf("%d", openCount),
+			"max", fmt.Sprintf("%d", maxOpen),
+		), true)
 		return
 	}
 
@@ -482,7 +484,6 @@ func createTicket(s *discordgo.Session, i *discordgo.InteractionCreate, catID, s
 	channelName := fmt.Sprintf("ticket-%04d", num)
 	discordCat := config.EffectiveTicketCategory(cfg, gs)
 
-	// Determine staff roles: per-category first, then global fallback
 	globalRoles := config.EffectiveTicketStaffRoles(cfg, gs)
 	categories := config.MergedTicketCategories(cfg, gs)
 	var staffRoles []string
@@ -519,7 +520,7 @@ func createTicket(s *discordgo.Session, i *discordgo.InteractionCreate, catID, s
 		PermissionOverwrites: overwrites,
 	})
 	if err != nil {
-		respond(s, i, fmt.Sprintf("Failed to create ticket channel: %v", err), true)
+		respond(s, i, lang.T("ticket_create_failed", "error", err.Error()), true)
 		return
 	}
 
@@ -555,8 +556,8 @@ func createTicket(s *discordgo.Session, i *discordgo.InteractionCreate, catID, s
 	_ = gs.Save()
 
 	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("Ticket #%04d", num),
-		Description: fmt.Sprintf("Welcome <@%s>!\n\n**Topic:** %s\n\nPlease describe your issue and a staff member will assist you shortly.", userID, topicText),
+		Title:       lang.T("ticket_welcome_title", "number", fmt.Sprintf("%04d", num)),
+		Description: lang.T("ticket_welcome_body", "user_id", userID, "category", topicText),
 		Color:       0x57F287,
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
@@ -573,47 +574,48 @@ func createTicket(s *discordgo.Session, i *discordgo.InteractionCreate, catID, s
 			discordgo.ActionsRow{
 				Components: []discordgo.MessageComponent{
 					discordgo.Button{
-						Label: "Close Ticket", Style: discordgo.DangerButton,
+						Label:    lang.T("ticket_close_btn_label"),
+						Style:    discordgo.DangerButton,
 						CustomID: "ticket_close_btn",
-						Emoji:    &discordgo.ComponentEmoji{Name: "🔒"},
 					},
 				},
 			},
 		},
 	})
 
-	respond(s, i, fmt.Sprintf("Ticket created: <#%s>", ch.ID), true)
+	respond(s, i, lang.T("ticket_created", "channel_id", ch.ID), true)
 }
 
 func handleCloseCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	gs := storage.GetGuild(i.GuildID)
 	ticket, ok := gs.TicketRuntime.OpenTickets[i.ChannelID]
 	if !ok {
-		respond(s, i, "This is not a ticket channel.", true)
+		respond(s, i, lang.T("ticket_not_ticket_channel"), true)
 		return
 	}
 
 	closeTicket(s, i.GuildID, i.ChannelID, i.Member.User, &ticket, gs)
-	respond(s, i, "Ticket closing...", false)
+	respond(s, i, lang.T("ticket_closing"), false)
 }
 
 func handleCloseButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	gs := storage.GetGuild(i.GuildID)
 	_, ok := gs.TicketRuntime.OpenTickets[i.ChannelID]
 	if !ok {
-		respond(s, i, "This is not a ticket channel.", true)
+		respond(s, i, lang.T("ticket_not_ticket_channel"), true)
 		return
 	}
 
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: "Are you sure you want to close this ticket?",
+			Content: lang.T("ticket_close_confirm_prompt"),
+			Flags:   discordgo.MessageFlagsEphemeral,
 			Components: []discordgo.MessageComponent{
 				discordgo.ActionsRow{
 					Components: []discordgo.MessageComponent{
-						discordgo.Button{Label: "Confirm Close", Style: discordgo.DangerButton, CustomID: "ticket_close_confirm"},
-						discordgo.Button{Label: "Cancel", Style: discordgo.SecondaryButton, CustomID: "ticket_close_cancel"},
+						discordgo.Button{Label: lang.T("ticket_close_confirm_btn"), Style: discordgo.DangerButton, CustomID: "ticket_close_confirm"},
+						discordgo.Button{Label: lang.T("ticket_close_cancel_btn"), Style: discordgo.SecondaryButton, CustomID: "ticket_close_cancel"},
 					},
 				},
 			},
@@ -625,7 +627,7 @@ func handleCloseConfirm(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	gs := storage.GetGuild(i.GuildID)
 	ticket, ok := gs.TicketRuntime.OpenTickets[i.ChannelID]
 	if !ok {
-		respond(s, i, "Ticket not found.", true)
+		respond(s, i, lang.T("ticket_not_found"), true)
 		return
 	}
 
@@ -640,7 +642,10 @@ func handleCloseConfirm(s *discordgo.Session, i *discordgo.InteractionCreate) {
 func handleCloseCancel(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
-		Data: &discordgo.InteractionResponseData{Content: "Ticket close cancelled.", Components: []discordgo.MessageComponent{}},
+		Data: &discordgo.InteractionResponseData{
+			Content:    lang.T("ticket_close_cancelled"),
+			Components: []discordgo.MessageComponent{},
+		},
 	})
 }
 
@@ -687,7 +692,7 @@ func closeTicket(s *discordgo.Session, guildID, channelID string, closedBy *disc
 func handleAddUser(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	gs := storage.GetGuild(i.GuildID)
 	if _, ok := gs.TicketRuntime.OpenTickets[i.ChannelID]; !ok {
-		respond(s, i, "This is not a ticket channel.", true)
+		respond(s, i, lang.T("ticket_not_ticket_channel"), true)
 		return
 	}
 
@@ -697,16 +702,16 @@ func handleAddUser(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	err := s.ChannelPermissionSet(i.ChannelID, target.ID, discordgo.PermissionOverwriteTypeMember,
 		discordgo.PermissionViewChannel|discordgo.PermissionSendMessages|discordgo.PermissionReadMessageHistory, 0)
 	if err != nil {
-		respond(s, i, fmt.Sprintf("Failed: %v", err), true)
+		respond(s, i, lang.T("ticket_add_user_failed", "error", err.Error()), true)
 		return
 	}
-	respond(s, i, fmt.Sprintf("Added <@%s> to this ticket.", target.ID), false)
+	respond(s, i, lang.T("ticket_user_added", "user_id", target.ID), false)
 }
 
 func handleRemoveUser(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	gs := storage.GetGuild(i.GuildID)
 	if _, ok := gs.TicketRuntime.OpenTickets[i.ChannelID]; !ok {
-		respond(s, i, "This is not a ticket channel.", true)
+		respond(s, i, lang.T("ticket_not_ticket_channel"), true)
 		return
 	}
 
@@ -715,10 +720,10 @@ func handleRemoveUser(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	err := s.ChannelPermissionDelete(i.ChannelID, target.ID)
 	if err != nil {
-		respond(s, i, fmt.Sprintf("Failed: %v", err), true)
+		respond(s, i, lang.T("ticket_remove_user_failed", "error", err.Error()), true)
 		return
 	}
-	respond(s, i, fmt.Sprintf("Removed <@%s> from this ticket.", target.ID), false)
+	respond(s, i, lang.T("ticket_user_removed", "user_id", target.ID), false)
 }
 
 func generateTranscript(s *discordgo.Session, channelID string) string {

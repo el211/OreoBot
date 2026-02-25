@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"discord-bot/config"
+	"discord-bot/lang"
 	"discord-bot/storage"
 
 	"github.com/bwmarrin/discordgo"
@@ -145,11 +146,11 @@ func handleBan(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	err := s.GuildBanCreateWithReason(i.GuildID, target.ID, reason, days)
 	if err != nil {
-		respond(s, i, fmt.Sprintf(" Failed to ban: %v", err), true)
+		respond(s, i, lang.T("mod_ban_failed", "error", err.Error()), true)
 		return
 	}
 
-	respond(s, i, fmt.Sprintf("🔨 **%s** has been banned. Reason: %s", target.Username, reason), false)
+	respond(s, i, lang.T("mod_ban_success", "user", target.Username, "reason", reason), false)
 	logModAction(s, i.GuildID, "Ban", target, i.Member.User, reason, "")
 }
 
@@ -160,11 +161,11 @@ func handleUnban(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	err := s.GuildBanDelete(i.GuildID, userID)
 	if err != nil {
-		respond(s, i, fmt.Sprintf(" Failed to unban: %v", err), true)
+		respond(s, i, lang.T("mod_unban_failed", "error", err.Error()), true)
 		return
 	}
 
-	respond(s, i, fmt.Sprintf(" User `%s` has been unbanned. Reason: %s", userID, reason), false)
+	respond(s, i, lang.T("mod_unban_success", "user_id", userID, "reason", reason), false)
 }
 
 func handleKick(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -174,11 +175,11 @@ func handleKick(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	err := s.GuildMemberDeleteWithReason(i.GuildID, target.ID, reason)
 	if err != nil {
-		respond(s, i, fmt.Sprintf(" Failed to kick: %v", err), true)
+		respond(s, i, lang.T("mod_kick_failed", "error", err.Error()), true)
 		return
 	}
 
-	respond(s, i, fmt.Sprintf("👢 **%s** has been kicked. Reason: %s", target.Username, reason), false)
+	respond(s, i, lang.T("mod_kick_success", "user", target.Username, "reason", reason), false)
 	logModAction(s, i.GuildID, "Kick", target, i.Member.User, reason, "")
 }
 
@@ -190,22 +191,22 @@ func handleMute(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	dur, err := parseDuration(durStr)
 	if err != nil {
-		respond(s, i, " Invalid duration. Use formats like `10m`, `2h`, `1d`.", true)
+		respond(s, i, lang.T("mod_mute_invalid_dur"), true)
 		return
 	}
 	if dur > 28*24*time.Hour {
-		respond(s, i, " Maximum timeout is 28 days.", true)
+		respond(s, i, lang.T("mod_mute_max_duration"), true)
 		return
 	}
 
 	until := time.Now().Add(dur)
 	err = s.GuildMemberTimeout(i.GuildID, target.ID, &until)
 	if err != nil {
-		respond(s, i, fmt.Sprintf(" Failed to mute: %v", err), true)
+		respond(s, i, lang.T("mod_mute_failed", "error", err.Error()), true)
 		return
 	}
 
-	respond(s, i, fmt.Sprintf("🔇 **%s** has been muted for `%s`. Reason: %s", target.Username, durStr, reason), false)
+	respond(s, i, lang.T("mod_mute_success", "user", target.Username, "duration", durStr, "reason", reason), false)
 	logModAction(s, i.GuildID, "Mute", target, i.Member.User, reason, durStr)
 }
 
@@ -215,11 +216,11 @@ func handleUnmute(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	err := s.GuildMemberTimeout(i.GuildID, target.ID, nil)
 	if err != nil {
-		respond(s, i, fmt.Sprintf(" Failed to unmute: %v", err), true)
+		respond(s, i, lang.T("mod_unmute_failed", "error", err.Error()), true)
 		return
 	}
 
-	respond(s, i, fmt.Sprintf("🔊 **%s** has been unmuted.", target.Username), false)
+	respond(s, i, lang.T("mod_unmute_success", "user", target.Username), false)
 	logModAction(s, i.GuildID, "Unmute", target, i.Member.User, "", "")
 }
 
@@ -246,7 +247,7 @@ func handleWarn(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	gs.Unlock()
 	_ = gs.Save()
 
-	respond(s, i, fmt.Sprintf("⚠️ **%s** has been warned (Warning #%d). Reason: %s", target.Username, w.ID, reason), false)
+	respond(s, i, lang.T("mod_warn_success", "user", target.Username, "id", strconv.Itoa(w.ID), "reason", reason), false)
 	logModAction(s, i.GuildID, fmt.Sprintf("Warn (#%d)", w.ID), target, i.Member.User, reason, "")
 }
 
@@ -264,18 +265,23 @@ func handleWarnings(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	if len(warns) == 0 {
-		respond(s, i, fmt.Sprintf(" **%s** has no warnings.", target.Username), true)
+		respond(s, i, lang.T("mod_no_warnings", "user", target.Username), true)
 		return
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("📋 **Warnings for %s** (%d total):\n", target.Username, len(warns)))
+	sb.WriteString(lang.T("mod_warnings_header", "user", target.Username, "count", strconv.Itoa(len(warns))))
 	for _, w := range warns {
 		ts := w.Timestamp
 		if len(ts) >= 10 {
 			ts = ts[:10]
 		}
-		sb.WriteString(fmt.Sprintf("`#%d` — %s (by <@%s> on %s)\n", w.ID, w.Reason, w.ModID, ts))
+		sb.WriteString(lang.T("mod_warnings_entry",
+			"id", strconv.Itoa(w.ID),
+			"reason", w.Reason,
+			"mod_id", w.ModID,
+			"timestamp", ts,
+		))
 	}
 	respond(s, i, sb.String(), true)
 }
@@ -294,14 +300,14 @@ func handleClearWarnings(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	gs.Unlock()
 	_ = gs.Save()
 
-	respond(s, i, fmt.Sprintf("🗑️ All warnings cleared for **%s**.", target.Username), false)
+	respond(s, i, lang.T("mod_warnings_cleared", "user", target.Username), false)
 }
 
 func handlePurge(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	opts := optionMap(i)
 	count := int(opts["count"].IntValue())
 	if count < 1 || count > 100 {
-		respond(s, i, " Count must be between 1 and 100.", true)
+		respond(s, i, lang.T("mod_purge_invalid_count"), true)
 		return
 	}
 
@@ -312,7 +318,7 @@ func handlePurge(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	msgs, err := s.ChannelMessages(i.ChannelID, count, "", "", "")
 	if err != nil {
-		followup(s, i, fmt.Sprintf(" Failed to fetch messages: %v", err))
+		followup(s, i, lang.T("mod_purge_fetch_failed", "error", err.Error()))
 		return
 	}
 
@@ -330,7 +336,7 @@ func handlePurge(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	if len(ids) == 0 {
-		followup(s, i, "No messages found matching criteria.")
+		followup(s, i, lang.T("mod_purge_no_messages"))
 		return
 	}
 
@@ -340,7 +346,7 @@ func handlePurge(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		_ = s.ChannelMessagesBulkDelete(i.ChannelID, ids)
 	}
 
-	followup(s, i, fmt.Sprintf("🗑️ Deleted **%d** messages.", len(ids)))
+	followup(s, i, lang.T("mod_purge_success", "count", strconv.Itoa(len(ids))))
 }
 
 func handleSlowmode(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -355,14 +361,14 @@ func handleSlowmode(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	_, err := s.ChannelEdit(i.ChannelID, &discordgo.ChannelEdit{RateLimitPerUser: &secs})
 	if err != nil {
-		respond(s, i, fmt.Sprintf(" Failed: %v", err), true)
+		respond(s, i, lang.T("mod_slowmode_failed", "error", err.Error()), true)
 		return
 	}
 
 	if secs == 0 {
-		respond(s, i, "⏱️ Slowmode **disabled**.", false)
+		respond(s, i, lang.T("mod_slowmode_disabled"), false)
 	} else {
-		respond(s, i, fmt.Sprintf("⏱️ Slowmode set to **%d seconds**.", secs), false)
+		respond(s, i, lang.T("mod_slowmode_set", "seconds", strconv.Itoa(secs)), false)
 	}
 }
 
@@ -373,10 +379,10 @@ func handleLock(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		0, discordgo.PermissionSendMessages,
 	)
 	if err != nil {
-		respond(s, i, fmt.Sprintf(" Failed: %v", err), true)
+		respond(s, i, lang.T("mod_lock_failed", "error", err.Error()), true)
 		return
 	}
-	respond(s, i, "🔒 Channel **locked**.", false)
+	respond(s, i, lang.T("mod_lock_success"), false)
 }
 
 func handleUnlock(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -386,10 +392,10 @@ func handleUnlock(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		discordgo.PermissionSendMessages, 0,
 	)
 	if err != nil {
-		respond(s, i, fmt.Sprintf(" Failed: %v", err), true)
+		respond(s, i, lang.T("mod_unlock_failed", "error", err.Error()), true)
 		return
 	}
-	respond(s, i, "🔓 Channel **unlocked**.", false)
+	respond(s, i, lang.T("mod_unlock_success"), false)
 }
 
 func handleModlog(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -402,7 +408,7 @@ func handleModlog(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	gs.Unlock()
 	_ = gs.Save()
 
-	respond(s, i, fmt.Sprintf("📝 Mod-log channel set to <#%s>.", ch.ID), false)
+	respond(s, i, lang.T("mod_log_set", "channel_id", ch.ID), false)
 }
 
 func handleUserinfo(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -416,7 +422,7 @@ func handleUserinfo(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	member, err := s.GuildMember(i.GuildID, target.ID)
 	if err != nil {
-		respond(s, i, fmt.Sprintf(" Could not fetch member: %v", err), true)
+		respond(s, i, lang.T("mod_fetch_member_failed", "error", err.Error()), true)
 		return
 	}
 
@@ -447,7 +453,7 @@ func handleUserinfo(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("User Info — %s", target.Username),
+		Title: lang.T("userinfo_title", "user", target.Username),
 		Color: 0x5865F2,
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: target.AvatarURL("256"),
@@ -456,7 +462,7 @@ func handleUserinfo(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			{Name: "ID", Value: target.ID, Inline: true},
 			{Name: "Account Created", Value: createdAt, Inline: true},
 			{Name: "Joined Server", Value: joinedAt, Inline: true},
-			{Name: fmt.Sprintf("Roles (%d)", len(member.Roles)), Value: roles},
+			{Name: lang.T("userinfo_roles_field", "count", strconv.Itoa(len(member.Roles))), Value: roles},
 			{Name: "Warnings", Value: strconv.Itoa(warnCount), Inline: true},
 		},
 	}
@@ -484,19 +490,34 @@ func logModAction(s *discordgo.Session, guildID, action string, target, moderato
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("Moderation — %s", action),
+		Title: lang.T("modlog_embed_title", "action", action),
 		Color: 0xED4245,
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "User", Value: fmt.Sprintf("%s (`%s`)", target.Username, target.ID), Inline: true},
-			{Name: "Moderator", Value: fmt.Sprintf("%s (`%s`)", moderator.Username, moderator.ID), Inline: true},
+			{
+				Name:   lang.T("modlog_user_field"),
+				Value:  fmt.Sprintf("%s (`%s`)", target.Username, target.ID),
+				Inline: true,
+			},
+			{
+				Name:   lang.T("modlog_mod_field"),
+				Value:  fmt.Sprintf("%s (`%s`)", moderator.Username, moderator.ID),
+				Inline: true,
+			},
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 	if reason != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Reason", Value: reason})
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:  lang.T("modlog_reason_field"),
+			Value: reason,
+		})
 	}
 	if duration != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Duration", Value: duration, Inline: true})
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   lang.T("modlog_duration_field"),
+			Value:  duration,
+			Inline: true,
+		})
 	}
 
 	_, _ = s.ChannelMessageSendEmbed(logCh, embed)

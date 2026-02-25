@@ -4,6 +4,7 @@ import (
 	"discord-bot/bot"
 	"discord-bot/config"
 	"discord-bot/handlers"
+	"discord-bot/lang"
 	"discord-bot/minecraft"
 	"discord-bot/music"
 	"discord-bot/storage"
@@ -28,6 +29,8 @@ func main() {
 	if cfg.Discord.Token == "" || cfg.Discord.Token == "YOUR_DISCORD_BOT_TOKEN_HERE" {
 		log.Fatal("Set your bot token in config.json → discord.token")
 	}
+
+	lang.Load("lang.yml")
 
 	storage.Cfg = cfg
 
@@ -87,7 +90,6 @@ func main() {
 	}
 
 	if cfg.Minecraft.Enabled {
-
 		handlers.StartLinkPoller(b.Session, guildID)
 	}
 

@@ -1,9 +1,10 @@
 package handlers
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
+
+	"discord-bot/lang"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -41,7 +42,7 @@ func utilityCommands() []*discordgo.ApplicationCommand {
 
 func handleSay(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if !isAdmin(s, i) {
-		respond(s, i, "You need admin permissions to use this command.", true)
+		respond(s, i, lang.T("no_permission"), true)
 		return
 	}
 
@@ -53,16 +54,16 @@ func handleSay(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	_, err := s.ChannelMessageSend(ch.ID, msg)
 	if err != nil {
-		respond(s, i, fmt.Sprintf("Failed to send message: %v", err), true)
+		respond(s, i, lang.T("say_failed", "error", err.Error()), true)
 		return
 	}
 
-	respond(s, i, fmt.Sprintf("Message sent to <#%s>!", ch.ID), true)
+	respond(s, i, lang.T("say_success", "channel_id", ch.ID), true)
 }
 
 func handleEmbed(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if !isAdmin(s, i) {
-		respond(s, i, "You need admin permissions to use this command.", true)
+		respond(s, i, lang.T("no_permission"), true)
 		return
 	}
 
@@ -115,9 +116,9 @@ func handleEmbed(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	_, err := s.ChannelMessageSendEmbed(ch.ID, embed)
 	if err != nil {
-		respond(s, i, fmt.Sprintf("Failed to send embed: %v", err), true)
+		respond(s, i, lang.T("embed_failed", "error", err.Error()), true)
 		return
 	}
 
-	respond(s, i, fmt.Sprintf("Embed sent to <#%s>!", ch.ID), true)
+	respond(s, i, lang.T("embed_success", "channel_id", ch.ID), true)
 }

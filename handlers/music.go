@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"discord-bot/lang"
 	"discord-bot/music"
 	"discord-bot/storage"
 
@@ -38,11 +39,11 @@ func musicCommands() []*discordgo.ApplicationCommand {
 func handleMusicCommand(s *discordgo.Session, i *discordgo.InteractionCreate, name string) {
 	cfg := storage.Cfg
 	if !cfg.Music.Enabled {
-		respond(s, i, " Music is disabled in config.json.", true)
+		respond(s, i, lang.T("music_disabled"), true)
 		return
 	}
 	if MusicMgr == nil {
-		respond(s, i, " Music system failed to initialise. Check the server logs.", true)
+		respond(s, i, lang.T("music_init_failed"), true)
 		return
 	}
 
@@ -73,7 +74,7 @@ func handlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	voiceChID := music.GetVoiceChannelOfUser(s, i.GuildID, i.Member.User.ID)
 	if voiceChID == "" {
-		respond(s, i, " You need to be in a voice channel first!", true)
+		respond(s, i, lang.T("music_not_in_vc"), true)
 		return
 	}
 
@@ -85,27 +86,27 @@ func handlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	song, err := MusicMgr.ResolveSong(query)
 	if err != nil {
-		followup(s, i, fmt.Sprintf(" Could not find song: %v", err))
+		followup(s, i, lang.T("music_song_not_found", "error", err.Error()))
 		return
 	}
 
 	if cfg.Music.MaxSongDuration > 0 && song.Duration > cfg.Music.MaxSongDuration {
-		followup(s, i, fmt.Sprintf(" Song is too long (%d:%02d). Max duration is %d:%02d.",
-			song.Duration/60, song.Duration%60,
-			cfg.Music.MaxSongDuration/60, cfg.Music.MaxSongDuration%60))
+		dur := fmt.Sprintf("%d:%02d", song.Duration/60, song.Duration%60)
+		maxDur := fmt.Sprintf("%d:%02d", cfg.Music.MaxSongDuration/60, cfg.Music.MaxSongDuration%60)
+		followup(s, i, lang.T("music_song_too_long", "duration", dur, "max_duration", maxDur))
 		return
 	}
 
 	song.AddedBy = i.Member.User.Username
 
 	if err := player.JoinChannel(i.GuildID, voiceChID); err != nil {
-		followup(s, i, fmt.Sprintf(" Could not join voice channel: %v", err))
+		followup(s, i, lang.T("music_vc_join_failed", "error", err.Error()))
 		return
 	}
 
 	pos, err := player.Enqueue(song, cfg.Music.MaxQueueSize)
 	if err != nil {
-		followup(s, i, fmt.Sprintf(" %v", err))
+		followup(s, i, lang.T("music_queue_full", "error", err.Error()))
 		return
 	}
 
@@ -115,17 +116,29 @@ func handlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		player.PlayNext()
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{{
-				Title:       "🎶 Now Playing",
-				Description: fmt.Sprintf("**[%s](%s)**\nDuration: `%s` | Requested by: %s\nBackend: `%s`", song.Title, song.URL, durationStr, song.AddedBy, MusicMgr.BackendName()),
-				Color:       0x1DB954,
+				Title: lang.T("music_now_playing_title"),
+				Description: lang.T("music_now_playing_desc",
+					"title", song.Title,
+					"url", song.URL,
+					"duration", durationStr,
+					"added_by", song.AddedBy,
+					"backend", MusicMgr.BackendName(),
+				),
+				Color: 0x1DB954,
 			}},
 		})
 	} else {
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{{
-				Title:       " Added to Queue",
-				Description: fmt.Sprintf("**[%s](%s)**\nDuration: `%s` | Position: #%d | Requested by: %s", song.Title, song.URL, durationStr, pos, song.AddedBy),
-				Color:       0x5865F2,
+				Title: lang.T("music_added_to_queue_title"),
+				Description: lang.T("music_added_to_queue_desc",
+					"title", song.Title,
+					"url", song.URL,
+					"duration", durationStr,
+					"position", fmt.Sprintf("%d", pos),
+					"added_by", song.AddedBy,
+				),
+				Color: 0x5865F2,
 			}},
 		})
 	}
@@ -133,33 +146,33 @@ func handlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 func handleSkip(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if !isDJ(s, i) {
-		respond(s, i, " You need a DJ role to skip.", true)
+		respond(s, i, lang.T("music_dj_required_skip"), true)
 		return
 	}
 
 	player := MusicMgr.GetPlayer(i.GuildID)
 	if !player.Playing {
-		respond(s, i, " Nothing is playing.", true)
+		respond(s, i, lang.T("music_nothing_playing"), true)
 		return
 	}
 
 	skipped := player.Skip()
 	if skipped != nil {
-		respond(s, i, fmt.Sprintf("⏭️ Skipped **%s**.", skipped.Title), false)
+		respond(s, i, lang.T("music_skipped_title", "title", skipped.Title), false)
 	} else {
-		respond(s, i, "⏭️ Skipped.", false)
+		respond(s, i, lang.T("music_skipped"), false)
 	}
 }
 
 func handleStop(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if !isDJ(s, i) {
-		respond(s, i, " You need a DJ role to stop.", true)
+		respond(s, i, lang.T("music_dj_required_stop"), true)
 		return
 	}
 
 	player := MusicMgr.GetPlayer(i.GuildID)
 	player.Stop()
-	respond(s, i, "⏹️ Stopped playback and cleared the queue.", false)
+	respond(s, i, lang.T("music_stopped"), false)
 }
 
 func handleQueue(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -176,32 +189,46 @@ func handleQueue(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	if np != nil {
 		dur := fmt.Sprintf("%d:%02d", np.Duration/60, np.Duration%60)
-		sb.WriteString(fmt.Sprintf("🎵 **Now Playing:** [%s](%s) [`%s`] (by %s)\n\n", np.Title, np.URL, dur, np.AddedBy))
+		sb.WriteString(lang.T("music_queue_now_playing",
+			"title", np.Title,
+			"url", np.URL,
+			"duration", dur,
+			"added_by", np.AddedBy,
+		))
 	} else {
-		sb.WriteString("Nothing is playing.\n\n")
+		sb.WriteString(lang.T("music_queue_nothing"))
 	}
 
 	if len(queue) == 0 {
-		sb.WriteString("Queue is empty.")
+		sb.WriteString(lang.T("music_queue_empty"))
 	} else {
-		sb.WriteString(fmt.Sprintf("**Queue** (%d songs):\n", len(queue)))
+		sb.WriteString(lang.T("music_queue_header", "count", fmt.Sprintf("%d", len(queue))))
 		max := 15
 		if len(queue) < max {
 			max = len(queue)
 		}
 		for idx := 0; idx < max; idx++ {
 			dur := fmt.Sprintf("%d:%02d", queue[idx].Duration/60, queue[idx].Duration%60)
-			sb.WriteString(fmt.Sprintf("`%d.` [%s](%s) [`%s`] (by %s)\n", idx+1, queue[idx].Title, queue[idx].URL, dur, queue[idx].AddedBy))
+			sb.WriteString(lang.T("music_queue_entry",
+				"pos", fmt.Sprintf("%d", idx+1),
+				"title", queue[idx].Title,
+				"url", queue[idx].URL,
+				"duration", dur,
+				"added_by", queue[idx].AddedBy,
+			))
 		}
 		if len(queue) > 15 {
-			sb.WriteString(fmt.Sprintf("...and %d more\n", len(queue)-15))
+			sb.WriteString(lang.T("music_queue_more", "count", fmt.Sprintf("%d", len(queue)-15)))
 		}
 	}
 
-	sb.WriteString(fmt.Sprintf("\n🔊 Volume: **%d%%** | Backend: `%s`", vol, MusicMgr.BackendName()))
+	sb.WriteString(lang.T("music_queue_footer",
+		"volume", fmt.Sprintf("%d", vol),
+		"backend", MusicMgr.BackendName(),
+	))
 
 	respondEmbed(s, i, &discordgo.MessageEmbed{
-		Title:       "📋 Music Queue",
+		Title:       lang.T("music_queue_embed_title"),
 		Description: sb.String(),
 		Color:       0x5865F2,
 	}, true)
@@ -209,7 +236,7 @@ func handleQueue(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 func handleVolume(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if !isDJ(s, i) {
-		respond(s, i, " You need a DJ role to change volume.", true)
+		respond(s, i, lang.T("music_dj_required_vol"), true)
 		return
 	}
 
@@ -224,7 +251,7 @@ func handleVolume(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	player := MusicMgr.GetPlayer(i.GuildID)
 	player.SetVolume(level)
-	respond(s, i, fmt.Sprintf("🔊 Volume set to **%d%%**.", level), false)
+	respond(s, i, lang.T("music_volume_set", "level", fmt.Sprintf("%d", level)), false)
 }
 
 func handleNowPlaying(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -236,16 +263,23 @@ func handleNowPlaying(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	player.Mu().Unlock()
 
 	if np == nil {
-		respond(s, i, "Nothing is playing.", true)
+		respond(s, i, lang.T("music_nothing_playing"), true)
 		return
 	}
 
 	dur := fmt.Sprintf("%d:%02d", np.Duration/60, np.Duration%60)
 
 	respondEmbed(s, i, &discordgo.MessageEmbed{
-		Title:       "🎵 Now Playing",
-		Description: fmt.Sprintf("**[%s](%s)**\nDuration: `%s` | Volume: %d%%\nRequested by: %s | Backend: `%s`", np.Title, np.URL, dur, vol, np.AddedBy, MusicMgr.BackendName()),
-		Color:       0x1DB954,
+		Title: lang.T("music_nowplaying_embed_title"),
+		Description: lang.T("music_nowplaying_embed_desc",
+			"title", np.Title,
+			"url", np.URL,
+			"duration", dur,
+			"volume", fmt.Sprintf("%d", vol),
+			"added_by", np.AddedBy,
+			"backend", MusicMgr.BackendName(),
+		),
+		Color: 0x1DB954,
 	}, false)
 }
 
@@ -255,7 +289,7 @@ func handlePause(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	player.Mu().Lock()
 	if !player.Playing || player.Paused {
 		player.Mu().Unlock()
-		respond(s, i, " Nothing to pause.", true)
+		respond(s, i, lang.T("music_nothing_to_pause"), true)
 		return
 	}
 	player.Paused = true
@@ -266,7 +300,7 @@ func handlePause(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		b.SetPaused(true)
 	}
 
-	respond(s, i, "⏸️ Paused.", false)
+	respond(s, i, lang.T("music_paused"), false)
 }
 
 func handleResume(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -275,7 +309,7 @@ func handleResume(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	player.Mu().Lock()
 	if !player.Paused {
 		player.Mu().Unlock()
-		respond(s, i, " Not paused.", true)
+		respond(s, i, lang.T("music_not_paused"), true)
 		return
 	}
 	player.Paused = false
@@ -286,5 +320,5 @@ func handleResume(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		b.SetPaused(false)
 	}
 
-	respond(s, i, "▶️ Resumed.", false)
+	respond(s, i, lang.T("music_resumed"), false)
 }

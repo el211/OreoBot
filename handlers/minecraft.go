@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"discord-bot/lang"
 	"discord-bot/minecraft"
 	"discord-bot/storage"
 
@@ -80,10 +81,7 @@ func StartLinkPoller(s *discordgo.Session, guildID string) {
 
 			if s != nil {
 				if ch, err := s.UserChannelCreate(c.DiscordID); err == nil {
-					_, _ = s.ChannelMessageSend(ch.ID, fmt.Sprintf(
-						"✅ Your Discord account is now linked to Minecraft account **%s**!\nUse `/mc profile` to view your stats.",
-						c.Username,
-					))
+					_, _ = s.ChannelMessageSend(ch.ID, lang.T("mc_link_poller_dm", "username", c.Username))
 				}
 			}
 
@@ -169,7 +167,7 @@ func minecraftCommands() []*discordgo.ApplicationCommand {
 func handleMinecraftCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	cfg := storage.Cfg
 	if !cfg.Minecraft.Enabled {
-		respond(s, i, "Minecraft integration is disabled in config.json.", true)
+		respond(s, i, lang.T("mc_disabled"), true)
 		return
 	}
 
@@ -191,11 +189,11 @@ func handleMinecraftCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 	}
 
 	if !isAdmin(s, i) {
-		respond(s, i, "❌ You need admin permissions for this subcommand.", true)
+		respond(s, i, lang.T("no_permission_subcommand"), true)
 		return
 	}
 	if RCONClient == nil {
-		respond(s, i, "RCON client not initialised.", true)
+		respond(s, i, lang.T("mc_rcon_not_init"), true)
 		return
 	}
 
@@ -216,11 +214,11 @@ func handleMinecraftCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 func handleMCStatus(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if !RCONClient.IsConnected() {
 		if err := RCONClient.Connect(); err != nil {
-			respond(s, i, fmt.Sprintf("Server unreachable: %v", err), true)
+			respond(s, i, lang.T("mc_rcon_unreachable", "error", err.Error()), true)
 			return
 		}
 	}
-	respond(s, i, "⛏️ Minecraft server is **online** and RCON is connected.", true)
+	respond(s, i, lang.T("mc_online"), true)
 }
 
 func handleMCCommand(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
@@ -229,7 +227,7 @@ func handleMCCommand(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 
 	resp, err := RCONClient.Command(cmd)
 	if err != nil {
-		respond(s, i, fmt.Sprintf("RCON error: %v", err), true)
+		respond(s, i, lang.T("mc_rcon_error", "error", err.Error()), true)
 		return
 	}
 	if resp == "" {
@@ -244,11 +242,11 @@ func handleMCCommand(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 func handleMCPlayers(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	resp, err := RCONClient.Command("list")
 	if err != nil {
-		respond(s, i, fmt.Sprintf("RCON error: %v", err), true)
+		respond(s, i, lang.T("mc_rcon_error", "error", err.Error()), true)
 		return
 	}
 	respondEmbed(s, i, &discordgo.MessageEmbed{
-		Title:       "⛏️ Online Players",
+		Title:       lang.T("mc_players_embed_title"),
 		Description: resp,
 		Color:       0x55FF55,
 	}, true)
@@ -260,10 +258,10 @@ func handleMCSay(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 
 	_, err := RCONClient.Command(fmt.Sprintf("say [Discord] %s: %s", i.Member.User.Username, message))
 	if err != nil {
-		respond(s, i, fmt.Sprintf("RCON error: %v", err), true)
+		respond(s, i, lang.T("mc_rcon_error", "error", err.Error()), true)
 		return
 	}
-	respond(s, i, fmt.Sprintf("Sent to server: **%s**", message), false)
+	respond(s, i, lang.T("mc_say_sent", "message", message), false)
 }
 
 func handleMCWhitelist(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
@@ -273,26 +271,23 @@ func handleMCWhitelist(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 
 	player = strings.ReplaceAll(player, " ", "")
 	if len(player) > 16 {
-		respond(s, i, "Invalid player name.", true)
+		respond(s, i, lang.T("mc_invalid_player"), true)
 		return
 	}
 
 	resp, err := RCONClient.Command(fmt.Sprintf("whitelist %s %s", action, player))
 	if err != nil {
-		respond(s, i, fmt.Sprintf("RCON error: %v", err), true)
+		respond(s, i, lang.T("mc_rcon_error", "error", err.Error()), true)
 		return
 	}
-	respond(s, i, fmt.Sprintf("`whitelist %s %s` → %s", action, player, resp), true)
+	respond(s, i, lang.T("mc_whitelist_result", "action", action, "player", player, "result", resp), true)
 }
 
 func handleMCLink(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	discordID := i.Member.User.ID
 
 	if link, err := MCStore.LoadLink(discordID); err == nil {
-		respond(s, i, fmt.Sprintf(
-			"✅ You are already linked to **%s**!\nUse `/mc unlink` to remove the link.",
-			link.Username,
-		), true)
+		respond(s, i, lang.T("mc_already_linked", "username", link.Username), true)
 		return
 	}
 
@@ -310,18 +305,15 @@ func handleMCLink(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	if err := MCStore.SavePendingCode(code, discordID, i.GuildID, expiresAt); err != nil {
 		log.Printf("[MC] SavePendingCode error: %v", err)
-		respond(s, i, "❌ Failed to generate link code. Please try again.", true)
+		respond(s, i, lang.T("mc_link_code_failed"), true)
 		return
 	}
 
 	respondEmbed(s, i, &discordgo.MessageEmbed{
-		Title: "🔗 Link Your Minecraft Account",
-		Description: fmt.Sprintf(
-			"Join the Minecraft server and run this command in chat:\n\n```\n/discord link %s\n```\n\n⏳ This code expires in **10 minutes**.",
-			code,
-		),
-		Color:  0x5865F2,
-		Footer: &discordgo.MessageEmbedFooter{Text: "Only you can see this message"},
+		Title:       lang.T("mc_link_embed_title"),
+		Description: lang.T("mc_link_embed_description", "code", code),
+		Color:       0x5865F2,
+		Footer:      &discordgo.MessageEmbedFooter{Text: lang.T("mc_link_embed_footer")},
 	}, true)
 }
 
@@ -330,12 +322,12 @@ func handleMCUnlink(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	link, err := MCStore.LoadLink(discordID)
 	if err != nil {
-		respond(s, i, "❌ You don't have a linked Minecraft account.", true)
+		respond(s, i, lang.T("mc_not_linked"), true)
 		return
 	}
 
 	if err := MCStore.DeleteLink(discordID); err != nil {
-		respond(s, i, fmt.Sprintf("❌ Failed to unlink: %v", err), true)
+		respond(s, i, lang.T("mc_unlink_failed", "error", err.Error()), true)
 		return
 	}
 
@@ -345,7 +337,7 @@ func handleMCUnlink(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		}
 	}
 
-	respond(s, i, fmt.Sprintf("✅ Unlinked from Minecraft account **%s**.", link.Username), true)
+	respond(s, i, lang.T("mc_unlinked", "username", link.Username), true)
 }
 
 func handleMCProfile(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
@@ -357,7 +349,7 @@ func handleMCProfile(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 		if u, ok := om["user"]; ok {
 			user := u.UserValue(s)
 			if user.ID != i.Member.User.ID && !isAdmin(s, i) {
-				respond(s, i, "❌ Only admins can view other players' profiles.", true)
+				respond(s, i, lang.T("mc_profile_admin_only"), true)
 				return
 			}
 			targetDiscordID = user.ID
@@ -368,15 +360,15 @@ func handleMCProfile(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 	link, err := MCStore.LoadLink(targetDiscordID)
 	if err != nil {
 		if targetDiscordID == i.Member.User.ID {
-			respond(s, i, "❌ You haven't linked your Minecraft account yet.\nUse `/mc link` to get started!", true)
+			respond(s, i, lang.T("mc_profile_self_not_linked"), true)
 		} else {
-			respond(s, i, fmt.Sprintf("❌ **%s** hasn't linked their Minecraft account.", targetName), true)
+			respond(s, i, lang.T("mc_profile_other_not_linked", "user", targetName), true)
 		}
 		return
 	}
 
 	if RCONClient == nil {
-		respond(s, i, "⚠️ RCON not available — cannot fetch live data.", true)
+		respond(s, i, lang.T("mc_profile_rcon_unavailable"), true)
 		return
 	}
 
@@ -390,16 +382,16 @@ func handleMCProfile(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 	onlineStatus := rconQuery(fmt.Sprintf("oe-discord online %s", link.UUID))
 
 	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("⛏️ %s's Minecraft Profile", link.Username),
+		Title: lang.T("mc_profile_embed_title", "username", link.Username),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: fmt.Sprintf("https://mc-heads.net/avatar/%s/64", link.UUID),
 		},
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Minecraft Username", Value: link.Username, Inline: true},
-			{Name: "Status", Value: onlineStatus, Inline: true},
-			{Name: "Linked Since", Value: link.LinkedAt, Inline: true},
-			{Name: "💰 Balance", Value: balance, Inline: true},
-			{Name: "🏠 Homes", Value: homes, Inline: false},
+			{Name: lang.T("mc_profile_field_username"), Value: link.Username, Inline: true},
+			{Name: lang.T("mc_profile_field_status"), Value: onlineStatus, Inline: true},
+			{Name: lang.T("mc_profile_field_linked_since"), Value: link.LinkedAt, Inline: true},
+			{Name: lang.T("mc_profile_field_balance"), Value: balance, Inline: true},
+			{Name: lang.T("mc_profile_field_homes"), Value: homes, Inline: false},
 		},
 		Color:  0x55FF55,
 		Footer: &discordgo.MessageEmbedFooter{Text: "UUID: " + link.UUID},
@@ -413,20 +405,24 @@ func handleMCProfile(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 
 func handleMCLinked(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if !isAdmin(s, i) {
-		respond(s, i, "❌ Admin only.", true)
+		respond(s, i, lang.T("admin_only"), true)
 		return
 	}
 
 	links, err := MCStore.ListLinks()
 	if err != nil || len(links) == 0 {
-		respond(s, i, "No linked accounts found.", true)
+		respond(s, i, lang.T("mc_linked_none"), true)
 		return
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("🔗 **Linked Accounts** (%d):\n\n", len(links)))
+	sb.WriteString(lang.T("mc_linked_header", "count", fmt.Sprintf("%d", len(links))))
 	for _, link := range links {
-		sb.WriteString(fmt.Sprintf("• <@%s> ↔ **%s** (linked %s)\n", link.DiscordID, link.Username, link.LinkedAt))
+		sb.WriteString(lang.T("mc_linked_entry",
+			"discord_id", link.DiscordID,
+			"username", link.Username,
+			"linked_at", link.LinkedAt,
+		))
 	}
 	respond(s, i, sb.String(), true)
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"discord-bot/config"
+	"discord-bot/lang"
 	"discord-bot/storage"
 
 	"github.com/bwmarrin/discordgo"
@@ -64,7 +65,7 @@ func giveawayCommands() []*discordgo.ApplicationCommand {
 
 func handleGiveawayCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if !isAdmin(s, i) {
-		respond(s, i, "❌ You need admin permissions.", true)
+		respond(s, i, lang.T("no_permission"), true)
 		return
 	}
 	sub := i.ApplicationCommandData().Options[0]
@@ -100,7 +101,7 @@ func handleGiveawayCreate(s *discordgo.Session, i *discordgo.InteractionCreate, 
 
 	dur, err := parseDuration(durStr)
 	if err != nil || dur <= 0 {
-		respond(s, i, "❌ Invalid duration. Use formats like `10m`, `2h`, `1d`.", true)
+		respond(s, i, lang.T("giveaway_invalid_duration"), true)
 		return
 	}
 
@@ -119,7 +120,7 @@ func handleGiveawayCreate(s *discordgo.Session, i *discordgo.InteractionCreate, 
 			discordgo.ActionsRow{
 				Components: []discordgo.MessageComponent{
 					discordgo.Button{
-						Label:    "🎉 Enter Giveaway",
+						Label:    lang.T("giveaway_embed_enter_btn"),
 						Style:    discordgo.PrimaryButton,
 						CustomID: "giveaway_enter:" + giveawayID,
 					},
@@ -128,7 +129,7 @@ func handleGiveawayCreate(s *discordgo.Session, i *discordgo.InteractionCreate, 
 		},
 	})
 	if err != nil {
-		respond(s, i, fmt.Sprintf("❌ Failed to post giveaway: %v", err), true)
+		respond(s, i, lang.T("giveaway_post_failed", "error", err.Error()), true)
 		return
 	}
 
@@ -152,7 +153,13 @@ func handleGiveawayCreate(s *discordgo.Session, i *discordgo.InteractionCreate, 
 
 	scheduleGiveaway(s, i.GuildID, giveawayID, dur)
 
-	respond(s, i, fmt.Sprintf("🎉 Giveaway **%s** (ID: `%s`) started in <#%s>!\nEnds <t:%d:R> | %d winner(s)", prize, giveawayID, ch.ID, endsAt.Unix(), winners), true)
+	respond(s, i, lang.T("giveaway_started",
+		"prize", prize,
+		"id", giveawayID,
+		"channel_id", ch.ID,
+		"timestamp", fmt.Sprintf("%d", endsAt.Unix()),
+		"winners", fmt.Sprintf("%d", winners),
+	), true)
 }
 
 func handleGiveawayEnd(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
@@ -170,19 +177,19 @@ func handleGiveawayEnd(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 	}
 	if found == nil {
 		gs.Unlock()
-		respond(s, i, fmt.Sprintf("❌ Giveaway `%s` not found. Use `/giveaway list`.", giveawayID), true)
+		respond(s, i, lang.T("giveaway_not_found", "id", giveawayID), true)
 		return
 	}
 	if found.Ended {
 		gs.Unlock()
-		respond(s, i, "❌ This giveaway has already ended. Use `/giveaway reroll` to reroll.", true)
+		respond(s, i, lang.T("giveaway_already_ended"), true)
 		return
 	}
 	gs.Unlock()
 
 	cancelGiveawayTimer(i.GuildID, giveawayID)
 	endGiveaway(s, i.GuildID, giveawayID)
-	respond(s, i, fmt.Sprintf("✅ Giveaway `%s` ended early — winners have been announced!", giveawayID), true)
+	respond(s, i, lang.T("giveaway_ended_early", "id", giveawayID), true)
 }
 
 func handleGiveawayReroll(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
@@ -200,12 +207,12 @@ func handleGiveawayReroll(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	}
 	if found == nil {
 		gs.Unlock()
-		respond(s, i, fmt.Sprintf("❌ Giveaway `%s` not found.", giveawayID), true)
+		respond(s, i, lang.T("giveaway_not_found_short", "id", giveawayID), true)
 		return
 	}
 	if !found.Ended {
 		gs.Unlock()
-		respond(s, i, "❌ This giveaway is still active. End it first with `/giveaway end`.", true)
+		respond(s, i, lang.T("giveaway_still_active"), true)
 		return
 	}
 	entrants := make([]string, 0, len(found.EntrantIDs))
@@ -218,7 +225,7 @@ func handleGiveawayReroll(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	gs.Unlock()
 
 	if len(entrants) == 0 {
-		respond(s, i, "❌ No entrants to reroll from.", true)
+		respond(s, i, lang.T("giveaway_no_entrants"), true)
 		return
 	}
 
@@ -227,9 +234,10 @@ func handleGiveawayReroll(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	for idx, w := range winners {
 		mentions[idx] = fmt.Sprintf("<@%s>", w)
 	}
+	mentionsStr := strings.Join(mentions, ", ")
 
-	_, _ = s.ChannelMessageSend(channelID, fmt.Sprintf("🔁 **Reroll!** New winner(s) for **%s**: %s\nCongratulations! 🎉", prize, strings.Join(mentions, ", ")))
-	respond(s, i, fmt.Sprintf("✅ Rerolled! New winners: %s", strings.Join(mentions, ", ")), true)
+	_, _ = s.ChannelMessageSend(channelID, lang.T("giveaway_reroll_announce", "prize", prize, "mentions", mentionsStr))
+	respond(s, i, lang.T("giveaway_rerolled", "mentions", mentionsStr), true)
 }
 
 func handleGiveawayList(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -247,16 +255,22 @@ func handleGiveawayList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	if len(active) == 0 {
-		respond(s, i, "🎉 No active giveaways right now.", true)
+		respond(s, i, lang.T("giveaway_none_active"), true)
 		return
 	}
 
 	var sb strings.Builder
-	sb.WriteString("🎉 **Active Giveaways:**\n\n")
+	sb.WriteString(lang.T("giveaway_list_header"))
 	for _, gw := range active {
 		endsAt, _ := time.Parse(time.RFC3339, gw.EndsAt)
-		sb.WriteString(fmt.Sprintf("`%s` — **%s** | %d winner(s) | %d entrants | ends <t:%d:R> | <#%s>\n",
-			gw.ID, gw.Prize, gw.Winners, len(gw.EntrantIDs), endsAt.Unix(), gw.ChannelID))
+		sb.WriteString(lang.T("giveaway_list_entry",
+			"id", gw.ID,
+			"prize", gw.Prize,
+			"winners", fmt.Sprintf("%d", gw.Winners),
+			"entries", fmt.Sprintf("%d", len(gw.EntrantIDs)),
+			"timestamp", fmt.Sprintf("%d", endsAt.Unix()),
+			"channel_id", gw.ChannelID,
+		))
 	}
 	respond(s, i, sb.String(), true)
 }
@@ -281,7 +295,7 @@ func HandleGiveawayEnter(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 	if gw == nil || gw.Ended {
 		gs.Unlock()
-		respond(s, i, "❌ This giveaway has already ended.", true)
+		respond(s, i, lang.T("giveaway_already_ended_btn"), true)
 		return
 	}
 	if gw.EntrantIDs == nil {
@@ -293,13 +307,13 @@ func HandleGiveawayEnter(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		gs.Unlock()
 		_ = gs.Save()
 		go updateGiveawayMessage(s, i.GuildID, giveawayID)
-		respond(s, i, "❌ You have **left** the giveaway.", true)
+		respond(s, i, lang.T("giveaway_left"), true)
 	} else {
 		gw.EntrantIDs[userID] = true
 		gs.Unlock()
 		_ = gs.Save()
 		go updateGiveawayMessage(s, i.GuildID, giveawayID)
-		respond(s, i, "✅ You entered the giveaway! Good luck! 🎉\n*(Click again to leave)*", true)
+		respond(s, i, lang.T("giveaway_entered"), true)
 	}
 }
 
@@ -335,18 +349,24 @@ func updateGiveawayMessage(s *discordgo.Session, guildID, giveawayID string) {
 }
 
 func buildGiveawayEmbed(prize, hostID string, winners int, endsAt time.Time, entrants int) *discordgo.MessageEmbed {
-	winStr := "winner"
+	winStr := lang.T("giveaway_embed_winner_singular")
 	if winners > 1 {
-		winStr = "winners"
+		winStr = lang.T("giveaway_embed_winner_plural")
 	}
 	return &discordgo.MessageEmbed{
-		Title: "🎉 GIVEAWAY 🎉",
-		Description: fmt.Sprintf(
-			"**Prize:** %s\n\n**Winners:** %d %s\n**Hosted by:** <@%s>\n**Entries:** %d\n\nClick **🎉 Enter Giveaway** to participate!\nEnds: <t:%d:R>",
-			prize, winners, winStr, hostID, entrants, endsAt.Unix(),
+		Title: lang.T("giveaway_embed_title"),
+		Description: lang.T("giveaway_embed_description",
+			"prize", prize,
+			"winners", fmt.Sprintf("%d", winners),
+			"winner_word", winStr,
+			"host_id", hostID,
+			"entries", fmt.Sprintf("%d", entrants),
+			"timestamp", fmt.Sprintf("%d", endsAt.Unix()),
 		),
-		Color:     0xFF73FA,
-		Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Ends at • %s UTC", endsAt.UTC().Format("Jan 02, 2006 15:04"))},
+		Color: 0xFF73FA,
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: lang.T("giveaway_embed_footer", "time", endsAt.UTC().Format("Jan 02, 2006 15:04")),
+		},
 		Timestamp: endsAt.Format(time.RFC3339),
 	}
 }
@@ -398,11 +418,13 @@ func endGiveaway(s *discordgo.Session, guildID, giveawayID string) {
 	gs.Unlock()
 	_ = gs.Save()
 
-	disabledBtn := true
 	endedEmbed := &discordgo.MessageEmbed{
-		Title:       "🎉 GIVEAWAY ENDED 🎉",
-		Description: fmt.Sprintf("**Prize:** %s\n**Entries:** %d\n\nThis giveaway has ended!", prize, len(entrants)),
-		Color:       0x808080,
+		Title: lang.T("giveaway_ended_embed_title"),
+		Description: lang.T("giveaway_ended_embed_description",
+			"prize", prize,
+			"entries", fmt.Sprintf("%d", len(entrants)),
+		),
+		Color: 0x808080,
 	}
 	_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 		Channel: channelID,
@@ -412,10 +434,10 @@ func endGiveaway(s *discordgo.Session, guildID, giveawayID string) {
 			discordgo.ActionsRow{
 				Components: []discordgo.MessageComponent{
 					discordgo.Button{
-						Label:    "🎉 Giveaway Ended",
+						Label:    lang.T("giveaway_ended_btn_label"),
 						Style:    discordgo.SecondaryButton,
 						CustomID: "giveaway_ended_" + giveawayID,
-						Disabled: disabledBtn,
+						Disabled: true,
 					},
 				},
 			},
@@ -423,7 +445,7 @@ func endGiveaway(s *discordgo.Session, guildID, giveawayID string) {
 	})
 
 	if len(entrants) == 0 {
-		_, _ = s.ChannelMessageSend(channelID, fmt.Sprintf("🎉 The giveaway for **%s** has ended, but nobody entered. 😢", prize))
+		_, _ = s.ChannelMessageSend(channelID, lang.T("giveaway_no_entrants_end", "prize", prize))
 		return
 	}
 
@@ -432,12 +454,11 @@ func endGiveaway(s *discordgo.Session, guildID, giveawayID string) {
 	for idx, w := range winners {
 		mentions[idx] = fmt.Sprintf("<@%s>", w)
 	}
+	mentionsStr := strings.Join(mentions, " ")
 
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("🎉 **Giveaway ended!** Congratulations to the winner(s) of **%s**:\n", prize))
-	sb.WriteString(strings.Join(mentions, " "))
-	sb.WriteString("\n\nUse `/giveaway reroll giveaway_id:" + giveawayID + "` to reroll if a winner can't claim the prize.")
-	_, _ = s.ChannelMessageSend(channelID, sb.String())
+	msg := lang.T("giveaway_winners_announce", "prize", prize, "mentions", mentionsStr) +
+		"\n\n" + lang.T("giveaway_reroll_hint", "id", giveawayID)
+	_, _ = s.ChannelMessageSend(channelID, msg)
 
 	gs.Lock()
 	for idx := range gs.Giveaways {

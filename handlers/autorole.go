@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"discord-bot/config"
+	"discord-bot/lang"
 	"discord-bot/storage"
 
 	"github.com/bwmarrin/discordgo"
@@ -97,7 +98,7 @@ func autoroleCommands() []*discordgo.ApplicationCommand {
 
 func handleJoinRoleCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if !isAdmin(s, i) {
-		respond(s, i, "❌ You need admin permissions.", true)
+		respond(s, i, lang.T("no_permission"), true)
 		return
 	}
 	sub := i.ApplicationCommandData().Options[0]
@@ -109,9 +110,9 @@ func handleJoinRoleCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 		role := om["role"].RoleValue(s, i.GuildID)
 
 		if warning := checkBotRoleHierarchy(s, i.GuildID, role); warning != "" {
-			respond(s, i, fmt.Sprintf("⚠️ Auto-role set, but there may be an issue:\n%s", warning), true)
+			respond(s, i, lang.T("autorole_set_warning", "warning", warning), true)
 		} else {
-			respond(s, i, fmt.Sprintf("✅ Join role set to <@&%s>. Every new member will receive this role automatically.", role.ID), true)
+			respond(s, i, lang.T("autorole_set_success", "role_id", role.ID), true)
 		}
 
 		gs.Lock()
@@ -124,16 +125,16 @@ func handleJoinRoleCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 		gs.AutoRole = config.AutoRoleState{Enabled: false}
 		gs.Unlock()
 		_ = gs.Save()
-		respond(s, i, "✅ Auto-role on join has been **disabled**.", true)
+		respond(s, i, lang.T("autorole_disabled"), true)
 
 	case "status":
 		gs.Lock()
 		ar := gs.AutoRole
 		gs.Unlock()
 		if ar.Enabled && ar.RoleID != "" {
-			respond(s, i, fmt.Sprintf("🎭 Auto-role is **enabled**. New members receive: <@&%s>", ar.RoleID), true)
+			respond(s, i, lang.T("autorole_status_enabled", "role_id", ar.RoleID), true)
 		} else {
-			respond(s, i, "🎭 Auto-role on join is **disabled**.", true)
+			respond(s, i, lang.T("autorole_status_disabled"), true)
 		}
 
 	case "check":
@@ -141,18 +142,18 @@ func handleJoinRoleCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 		ar := gs.AutoRole
 		gs.Unlock()
 		if !ar.Enabled || ar.RoleID == "" {
-			respond(s, i, "ℹ️ Auto-role is currently disabled. Set one with `/joinrole set`.", true)
+			respond(s, i, lang.T("autorole_hint_set"), true)
 			return
 		}
 		role, err := s.State.Role(i.GuildID, ar.RoleID)
 		if err != nil {
-			respond(s, i, fmt.Sprintf("❌ Could not find the configured role (`%s`). It may have been deleted. Reset with `/joinrole set`.", ar.RoleID), true)
+			respond(s, i, lang.T("autorole_role_deleted", "role_id", ar.RoleID), true)
 			return
 		}
 		if w := checkBotRoleHierarchy(s, i.GuildID, role); w != "" {
-			respond(s, i, "❌ **Problem detected:**\n"+w, true)
+			respond(s, i, lang.T("autorole_problem", "warning", w), true)
 		} else {
-			respond(s, i, fmt.Sprintf("✅ Everything looks good! The bot can assign <@&%s> to new members.", ar.RoleID), true)
+			respond(s, i, lang.T("autorole_ok", "role_id", ar.RoleID), true)
 		}
 	}
 }
@@ -162,12 +163,12 @@ func checkBotRoleHierarchy(s *discordgo.Session, guildID string, targetRole *dis
 
 	botMember, err := s.GuildMember(guildID, botID)
 	if err != nil {
-		return fmt.Sprintf("Could not fetch bot member data: %v", err)
+		return lang.T("autorole_fetch_bot_failed", "error", err.Error())
 	}
 
 	allRoles, err := s.GuildRoles(guildID)
 	if err != nil {
-		return fmt.Sprintf("Could not fetch guild roles: %v", err)
+		return lang.T("autorole_fetch_roles_failed", "error", err.Error())
 	}
 
 	roleMap := make(map[string]*discordgo.Role, len(allRoles))
@@ -214,7 +215,7 @@ func AssignJoinRole(s *discordgo.Session, guildID, userID string) {
 
 func handleRoleMenuCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if !isAdmin(s, i) {
-		respond(s, i, "❌ You need admin permissions.", true)
+		respond(s, i, lang.T("no_permission"), true)
 		return
 	}
 	sub := i.ApplicationCommandData().Options[0]
@@ -263,7 +264,11 @@ func handleRoleMenuCreate(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	if single {
 		mode = "single-select (selecting one removes the others)"
 	}
-	respond(s, i, fmt.Sprintf("✅ Role menu **%s** created! ID: `%s`\nMode: %s\n\nNext steps:\n• `/rolemenu add menu_id:%s role:... label:...` to add roles\n• `/rolemenu post menu_id:%s channel:#...` to publish it", title, menuID, mode, menuID, menuID), true)
+	respond(s, i, lang.T("rolemenu_created",
+		"title", title,
+		"id", menuID,
+		"mode", mode,
+	), true)
 }
 
 func handleRoleMenuAdd(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
@@ -279,7 +284,7 @@ func handleRoleMenuAdd(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 		if gs.RoleMenus[idx].ID == menuID {
 			if len(gs.RoleMenus[idx].Roles) >= 20 {
 				gs.Unlock()
-				respond(s, i, "❌ A menu can have at most 20 roles (Discord button limit).", true)
+				respond(s, i, lang.T("rolemenu_max_roles"), true)
 				return
 			}
 			gs.RoleMenus[idx].Roles = append(gs.RoleMenus[idx].Roles, config.RoleMenuEntry{
@@ -293,11 +298,11 @@ func handleRoleMenuAdd(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 	gs.Unlock()
 
 	if !found {
-		respond(s, i, fmt.Sprintf("❌ Menu `%s` not found. Use `/rolemenu list` to see available menus.", menuID), true)
+		respond(s, i, lang.T("rolemenu_not_found", "id", menuID), true)
 		return
 	}
 	_ = gs.Save()
-	respond(s, i, fmt.Sprintf("✅ Added **%s** (<@&%s>) to menu `%s`.", label, role.ID, menuID), true)
+	respond(s, i, lang.T("rolemenu_role_added", "label", label, "role_id", role.ID, "id", menuID), true)
 }
 
 func handleRoleMenuPost(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
@@ -318,12 +323,12 @@ func handleRoleMenuPost(s *discordgo.Session, i *discordgo.InteractionCreate, op
 	}
 	if menuCopy == nil {
 		gs.Unlock()
-		respond(s, i, fmt.Sprintf("❌ Menu `%s` not found. Use `/rolemenu list`.", menuID), true)
+		respond(s, i, lang.T("rolemenu_not_found_short", "id", menuID), true)
 		return
 	}
 	if len(menuCopy.Roles) == 0 {
 		gs.Unlock()
-		respond(s, i, "❌ This menu has no roles yet. Use `/rolemenu add` first.", true)
+		respond(s, i, lang.T("rolemenu_no_roles"), true)
 		return
 	}
 	gs.Unlock()
@@ -336,7 +341,7 @@ func handleRoleMenuPost(s *discordgo.Session, i *discordgo.InteractionCreate, op
 		Components: components,
 	})
 	if err != nil {
-		respond(s, i, fmt.Sprintf("❌ Failed to post menu: %v", err), true)
+		respond(s, i, lang.T("rolemenu_post_failed", "error", err.Error()), true)
 		return
 	}
 
@@ -351,7 +356,7 @@ func handleRoleMenuPost(s *discordgo.Session, i *discordgo.InteractionCreate, op
 	gs.Unlock()
 	_ = gs.Save()
 
-	respond(s, i, fmt.Sprintf("✅ Role menu **%s** posted in <#%s>!", menuCopy.Title, ch.ID), true)
+	respond(s, i, lang.T("rolemenu_posted", "title", menuCopy.Title, "channel_id", ch.ID), true)
 }
 
 func handleRoleMenuList(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -362,7 +367,7 @@ func handleRoleMenuList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	gs.Unlock()
 
 	if len(menus) == 0 {
-		respond(s, i, "📋 No role menus created yet. Use `/rolemenu create` to make one.", true)
+		respond(s, i, lang.T("rolemenu_none"), true)
 		return
 	}
 
@@ -401,11 +406,11 @@ func handleRoleMenuDelete(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	gs.Unlock()
 
 	if !found {
-		respond(s, i, fmt.Sprintf("❌ Menu `%s` not found.", menuID), true)
+		respond(s, i, lang.T("rolemenu_not_found_delete", "id", menuID), true)
 		return
 	}
 	_ = gs.Save()
-	respond(s, i, fmt.Sprintf("🗑️ Role menu `%s` deleted.", menuID), true)
+	respond(s, i, lang.T("rolemenu_deleted", "id", menuID), true)
 }
 
 func HandleRoleMenuButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -428,7 +433,7 @@ func HandleRoleMenuButton(s *discordgo.Session, i *discordgo.InteractionCreate) 
 	}
 	if menu == nil {
 		gs.Unlock()
-		respond(s, i, "❌ This role menu no longer exists.", true)
+		respond(s, i, lang.T("rolemenu_gone"), true)
 		return
 	}
 	isSingle := menu.SingleSelect
@@ -440,7 +445,7 @@ func HandleRoleMenuButton(s *discordgo.Session, i *discordgo.InteractionCreate) 
 
 	member, err := s.GuildMember(i.GuildID, userID)
 	if err != nil {
-		respond(s, i, "❌ Could not fetch your member data.", true)
+		respond(s, i, lang.T("rolemenu_member_fetch_failed"), true)
 		return
 	}
 
@@ -454,7 +459,7 @@ func HandleRoleMenuButton(s *discordgo.Session, i *discordgo.InteractionCreate) 
 
 	if hasRole {
 		_ = s.GuildMemberRoleRemove(i.GuildID, userID, roleID)
-		respond(s, i, fmt.Sprintf("✅ Removed <@&%s> from you.", roleID), true)
+		respond(s, i, lang.T("rolemenu_role_removed", "role_id", roleID), true)
 	} else {
 		if isSingle {
 			for _, rid := range menuRoleIDs {
@@ -464,7 +469,7 @@ func HandleRoleMenuButton(s *discordgo.Session, i *discordgo.InteractionCreate) 
 			}
 		}
 		_ = s.GuildMemberRoleAdd(i.GuildID, userID, roleID)
-		respond(s, i, fmt.Sprintf("✅ You now have <@&%s>! Click again to remove it.", roleID), true)
+		respond(s, i, lang.T("rolemenu_role_given", "role_id", roleID), true)
 	}
 }
 

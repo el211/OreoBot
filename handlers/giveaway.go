@@ -83,6 +83,17 @@ func handleGiveawayCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 }
 
 func handleGiveawayCreate(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	// Acknowledge immediately to prevent the 3-second Discord timeout.
+	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Flags: discordgo.MessageFlagsEphemeral,
+		},
+	}); err != nil {
+		// If we can't even defer, there is nothing we can do.
+		return
+	}
+
 	om := subOptMap(opts)
 	ch := om["channel"].ChannelValue(s)
 	prize := om["prize"].StringValue()
@@ -101,7 +112,7 @@ func handleGiveawayCreate(s *discordgo.Session, i *discordgo.InteractionCreate, 
 
 	dur, err := parseDuration(durStr)
 	if err != nil || dur <= 0 {
-		respond(s, i, lang.T("giveaway_invalid_duration"), true)
+		followup(s, i, lang.T("giveaway_invalid_duration"))
 		return
 	}
 
@@ -129,7 +140,7 @@ func handleGiveawayCreate(s *discordgo.Session, i *discordgo.InteractionCreate, 
 		},
 	})
 	if err != nil {
-		respond(s, i, lang.T("giveaway_post_failed", "error", err.Error()), true)
+		followup(s, i, lang.T("giveaway_post_failed", "error", err.Error()))
 		return
 	}
 
@@ -153,13 +164,13 @@ func handleGiveawayCreate(s *discordgo.Session, i *discordgo.InteractionCreate, 
 
 	scheduleGiveaway(s, i.GuildID, giveawayID, dur)
 
-	respond(s, i, lang.T("giveaway_started",
+	followup(s, i, lang.T("giveaway_started",
 		"prize", prize,
 		"id", giveawayID,
 		"channel_id", ch.ID,
 		"timestamp", fmt.Sprintf("%d", endsAt.Unix()),
 		"winners", fmt.Sprintf("%d", winners),
-	), true)
+	))
 }
 
 func handleGiveawayEnd(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {

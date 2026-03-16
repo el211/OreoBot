@@ -25,10 +25,11 @@ type LavalinkBackend struct {
 	secure   bool
 	session  *discordgo.Session
 
-	mu             sync.Mutex
-	stopFlag       bool
-	volume         int
-	currentGuildID string
+	mu               sync.Mutex
+	stopFlag         bool
+	volume           int
+	currentGuildID   string
+	currentChannelID string
 
 	wsMu      sync.RWMutex
 	ws        *websocket.Conn
@@ -66,6 +67,12 @@ func NewLavalinkBackend(cfg *config.LavalinkMusicConfig, s *discordgo.Session) (
 }
 
 func (l *LavalinkBackend) Name() string { return "lavalink" }
+
+func (l *LavalinkBackend) SetChannelID(channelID string) {
+	l.mu.Lock()
+	l.currentChannelID = channelID
+	l.mu.Unlock()
+}
 
 func (l *LavalinkBackend) baseURL() string {
 	scheme := "http"
@@ -431,11 +438,16 @@ func (l *LavalinkBackend) updateVoice(llSessionID, guildID string) error {
 func (l *LavalinkBackend) patchVoice(llSessionID, guildID, token, endpoint, voiceSessionID string) error {
 	playerURL := fmt.Sprintf("%s/v4/sessions/%s/players/%s", l.baseURL(), llSessionID, guildID)
 
+	l.mu.Lock()
+	channelID := l.currentChannelID
+	l.mu.Unlock()
+
 	payload := map[string]any{
 		"voice": map[string]any{
 			"token":     token,
 			"endpoint":  endpoint,
 			"sessionId": voiceSessionID,
+			"channelId": channelID,
 		},
 	}
 

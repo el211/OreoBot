@@ -91,6 +91,50 @@
     }
   },
 
+  "chat_bridge": {
+    "enabled": false,
+    "rabbitmq_uri": "",
+    "mc_channel_id": "",
+    "ban_sync": false,
+    "mod_sync": false
+  },
+
+  "custom_commands": [
+    {
+      "name": "example",
+      "description": "An example custom command",
+      "message": "This is the response to /example!",
+      "ephemeral": false
+    },
+    {
+      "name": "rabbitmq",
+      "description": "Learn about RabbitMQ",
+      "message": "For RabbitMQ please see the documentation at: https://...",
+      "ephemeral": false
+    },
+    {
+      "name": "rules",
+      "description": "Server rules",
+      "message": "**Rules:**\n1. Be respectful\n2. No spam",
+      "ephemeral": true
+    }
+  ],
+
+  "no_ping": {
+    "enabled": false,
+    "protected_roles": ["ROLE_ID_OWNER", "ROLE_ID_ADMIN", "ROLE_ID_MOD"],
+    "message": "{user} You are not allowed to ping **{role}**!",
+    "delete_message": true
+  },
+
+  "counting_game": {
+    "enabled": false,
+    "channel_id": "",
+    "fail_resets": true,
+    "delete_wrong": true,
+    "delete_non_numbers": true
+  },
+
   "tickets": {
     "enabled": true,
     "panel_channel": "",

@@ -99,6 +99,14 @@ func moderationCommands() []*discordgo.ApplicationCommand {
 			},
 		},
 		{
+			Name:                     "clear",
+			Description:              "Clear a number of messages from the channel",
+			DefaultMemberPermissions: &modPermission,
+			Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionInteger, Name: "count", Description: "Number of messages to delete (1-100)", Required: true},
+			},
+		},
+		{
 			Name:                     "slowmode",
 			Description:              "Set slowmode delay for the current channel",
 			DefaultMemberPermissions: &modPermission,
@@ -208,6 +216,10 @@ func handleMute(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	respond(s, i, lang.T("mod_mute_success", "user", target.Username, "duration", durStr, "reason", reason), false)
 	logModAction(s, i.GuildID, "Mute", target, i.Member.User, reason, durStr)
+
+	if ActiveBridge != nil {
+		ActiveBridge.SyncMuteToMC(target.ID, until, reason, i.Member.User.Username)
+	}
 }
 
 func handleUnmute(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -222,6 +234,10 @@ func handleUnmute(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	respond(s, i, lang.T("mod_unmute_success", "user", target.Username), false)
 	logModAction(s, i.GuildID, "Unmute", target, i.Member.User, "", "")
+
+	if ActiveBridge != nil {
+		ActiveBridge.SyncUnmuteToMC(target.ID)
+	}
 }
 
 func handleWarn(s *discordgo.Session, i *discordgo.InteractionCreate) {

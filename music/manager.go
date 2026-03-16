@@ -1,6 +1,7 @@
 package music
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
@@ -40,10 +41,11 @@ type GuildPlayer struct {
 	Paused     bool
 	Volume     int
 
-	VoiceConn *discordgo.VoiceConnection
-	backend   Backend
-	session   *discordgo.Session
-	stopCh    chan struct{}
+	VoiceConn      *discordgo.VoiceConnection
+	VoiceChannelID string
+	backend        Backend
+	session        *discordgo.Session
+	stopCh         chan struct{}
 }
 
 type Manager struct {
@@ -131,23 +133,26 @@ func (p *GuildPlayer) JoinChannel(guildID, channelID string) error {
 
 	if p.VoiceConn != nil {
 
-		if p.VoiceConn.ChannelID == channelID {
+		if p.VoiceChannelID == channelID {
 			return nil
 		}
-		p.VoiceConn.Disconnect()
+		_ = p.VoiceConn.Disconnect(context.Background())
 	}
 
 	ClearVoiceInfo(guildID)
 
-	vc, err := p.session.ChannelVoiceJoin(guildID, channelID, false, false)
+	vc, err := p.session.ChannelVoiceJoin(context.Background(), guildID, channelID, false, false)
 	if err != nil {
 		return err
 	}
 	p.VoiceConn = vc
+	p.VoiceChannelID = channelID
 
 	if isLavalink {
+		lb := p.backend.(*LavalinkBackend)
+		lb.SetChannelID(channelID)
 		time.Sleep(500 * time.Millisecond)
-		vc.Close()
+		vc.Kill()
 		log.Printf("[Music] Closed discordgo voice WS for guild %s (Lavalink will manage voice)", guildID)
 	}
 
@@ -183,8 +188,9 @@ func (p *GuildPlayer) PlayNext() {
 			time.Sleep(2 * time.Minute)
 			p.mu.Lock()
 			if !p.Playing && p.VoiceConn != nil {
-				p.VoiceConn.Disconnect()
+				_ = p.VoiceConn.Disconnect(context.Background())
 				p.VoiceConn = nil
+				p.VoiceChannelID = ""
 			}
 			p.mu.Unlock()
 		}()
@@ -240,9 +246,10 @@ func (p *GuildPlayer) Stop() {
 	p.backend.Stop()
 
 	if vc != nil {
-		vc.Disconnect()
+		_ = vc.Disconnect(context.Background())
 		p.mu.Lock()
 		p.VoiceConn = nil
+		p.VoiceChannelID = ""
 		p.mu.Unlock()
 		log.Printf("[Music] Disconnected from voice in guild %s", vc.GuildID)
 	}

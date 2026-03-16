@@ -325,7 +325,7 @@ func (d *DirectBackend) Play(vc *discordgo.VoiceConnection, song *Song, volume i
 		d.mu.Lock()
 		stopped := d.stopFlag
 		d.mu.Unlock()
-		if stopped || !vc.Ready {
+		if stopped || vc.Status != discordgo.VoiceConnectionStatusReady {
 			return
 		}
 

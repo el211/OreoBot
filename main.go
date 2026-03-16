@@ -60,6 +60,18 @@ func main() {
 
 	handlers.Register(b.Session)
 	handlers.RegisterWelcomeLeave(b.Session)
+	handlers.RegisterNoPing(b.Session, cfg)
+	handlers.RegisterCounting(b.Session, cfg)
+
+	if cfg.ChatBridge.Enabled {
+		bridge, err := handlers.NewChatBridge(b.Session, &cfg.ChatBridge)
+		if err != nil {
+			log.Printf("WARNING: ChatBridge init failed: %v", err)
+		} else {
+			bridge.Start()
+			defer bridge.Stop()
+		}
+	}
 
 	b.Session.AddHandler(func(s *discordgo.Session, e *discordgo.VoiceStateUpdate) {
 		if s.State != nil && s.State.User != nil && e.UserID == s.State.User.ID {
@@ -68,7 +80,11 @@ func main() {
 	})
 
 	b.Session.AddHandler(func(s *discordgo.Session, e *discordgo.VoiceServerUpdate) {
-		music.UpdateVoiceServer(e.GuildID, e.Token, e.Endpoint)
+		endpoint := ""
+		if e.Endpoint != nil {
+			endpoint = *e.Endpoint
+		}
+		music.UpdateVoiceServer(e.GuildID, e.Token, endpoint)
 	})
 
 	if err := b.Start(); err != nil {

@@ -8,16 +8,97 @@ import (
 )
 
 type Config struct {
-	Discord     DiscordConfig      `json:"discord"`
-	YouTube     YouTubeConfig      `json:"youtube"`
-	Database    DatabaseConfig     `json:"database"`
-	Minecraft   MinecraftConfig    `json:"minecraft"`
-	Permissions PermissionsConfig  `json:"permissions"`
-	Music       MusicConfig        `json:"music"`
-	Welcome     WelcomeLeaveConfig `json:"welcome"`
-	Leave       WelcomeLeaveConfig `json:"leave"`
-	Moderation  ModerationConfig   `json:"moderation"`
-	Tickets     TicketsConfig      `json:"tickets"`
+	Discord        DiscordConfig         `json:"discord"`
+	YouTube        YouTubeConfig         `json:"youtube"`
+	Database       DatabaseConfig        `json:"database"`
+	Minecraft      MinecraftConfig       `json:"minecraft"`
+	Permissions    PermissionsConfig     `json:"permissions"`
+	Music          MusicConfig           `json:"music"`
+	Welcome        WelcomeLeaveConfig    `json:"welcome"`
+	Leave          WelcomeLeaveConfig    `json:"leave"`
+	Moderation     ModerationConfig      `json:"moderation"`
+	Tickets        TicketsConfig         `json:"tickets"`
+	ChatBridge     ChatBridgeConfig      `json:"chat_bridge"`
+	CountingGame   CountingGameConfig    `json:"counting_game"`
+	NoPing         NoPingConfig          `json:"no_ping"`
+	CustomCommands []CustomCommandConfig `json:"custom_commands"`
+}
+
+// CustomCommandConfig defines a user-created slash command that replies with a fixed message.
+type CustomCommandConfig struct {
+	// Name of the slash command (no spaces, lowercase).
+	Name string `json:"name"`
+
+	// Description shown in Discord's command picker.
+	Description string `json:"description"`
+
+	// Message sent when the command is used. Supports Discord markdown.
+	Message string `json:"message"`
+
+	// Ephemeral: if true, only the user who ran the command sees the reply.
+	Ephemeral bool `json:"ephemeral"`
+}
+
+// NoPingConfig prevents certain roles from being mentioned.
+type NoPingConfig struct {
+	// Enable the no-ping rule.
+	Enabled bool `json:"enabled"`
+
+	// ProtectedRoles is a list of role IDs that must not be pinged.
+	ProtectedRoles []string `json:"protected_roles"`
+
+	// Message sent to the user when they ping a protected role.
+	// Use {user} for the offender's mention and {role} for the pinged role name.
+	Message string `json:"message"`
+
+	// DeleteMessage: delete the offending message (default true).
+	DeleteMessage bool `json:"delete_message"`
+}
+
+// CountingGameConfig configures the counting minigame channel.
+type CountingGameConfig struct {
+	// Enable the counting game.
+	Enabled bool `json:"enabled"`
+
+	// Discord channel ID where the game takes place.
+	ChannelID string `json:"channel_id"`
+
+	// FailResets: if true, a wrong number resets the count back to 0.
+	// If false, the wrong message is simply deleted and the count stays.
+	FailResets bool `json:"fail_resets"`
+
+	// DeleteWrong: delete messages that contain the wrong number (default true).
+	// Set to false to only warn without deleting.
+	DeleteWrong bool `json:"delete_wrong"`
+
+	// DeleteNonNumbers: delete messages that are not numbers at all (keeps the channel clean).
+	DeleteNonNumbers bool `json:"delete_non_numbers"`
+}
+
+// ChatBridgeConfig wires up a bidirectional Minecraft ↔ Discord chat bridge
+// via RabbitMQ (the same fanout exchange used by OreoEssentials ChatSyncManager).
+type ChatBridgeConfig struct {
+	// Enable the bridge. Everything below is ignored when false.
+	Enabled bool `json:"enabled"`
+
+	// RabbitMQ connection URI, e.g. "amqp://user:pass@host:5672/"
+	// Leave empty to disable the bridge even if Enabled is true.
+	RabbitMQURI string `json:"rabbitmq_uri"`
+
+	// Discord channel ID where MC chat is relayed and Discord users can chat back.
+	ChannelID string `json:"channel_id"`
+
+	// (Optional) OreoEssentials channel ID to target when channels mode is active.
+	// Leave empty if your servers run without the channels system — legacy format is used instead.
+	MCChannelID string `json:"mc_channel_id"`
+
+	// BanSync: when true, banning a linked user from Discord also bans them in Minecraft via RCON.
+	// Requires Minecraft.Enabled and a working RCON connection.
+	BanSync bool `json:"ban_sync"`
+
+	// ModSync: when true, /mute and /unmute on a linked user also mutes/unmutes them
+	// on all Minecraft servers via RabbitMQ (CTRL;;MUTE / CTRL;;UNMUTE).
+	ModSync bool `json:"mod_sync"`
 }
 
 type DiscordConfig struct {

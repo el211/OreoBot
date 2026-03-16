@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"log"
+	"strconv"
 	"strings"
 
 	"discord-bot/config"
@@ -23,8 +24,31 @@ func Commands(cfg *config.Config) []*discordgo.ApplicationCommand {
 	if cfg.Music.Enabled {
 		cmds = append(cmds, musicCommands()...)
 	}
+	cmds = append(cmds, buildCustomCommands(cfg)...)
 	return cmds
 }
+
+func buildCustomCommands(cfg *config.Config) []*discordgo.ApplicationCommand {
+	cmds := make([]*discordgo.ApplicationCommand, 0, len(cfg.CustomCommands))
+	for _, cc := range cfg.CustomCommands {
+		if cc.Name == "" || cc.Message == "" {
+			log.Printf("[CustomCmd] Skipping entry with empty name or message")
+			continue
+		}
+		desc := cc.Description
+		if desc == "" {
+			desc = cc.Name
+		}
+		cmds = append(cmds, &discordgo.ApplicationCommand{
+			Name:        strings.ToLower(cc.Name),
+			Description: desc,
+		})
+	}
+	return cmds
+}
+
+// customCommandMap holds the registered custom commands for fast lookup at runtime.
+var customCommandMap map[string]config.CustomCommandConfig
 
 func Register(s *discordgo.Session) {
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -39,6 +63,18 @@ func Register(s *discordgo.Session) {
 			handleComponent(s, i)
 		}
 	})
+}
+
+// RegisterCustomCommands builds the runtime lookup map from config.
+// Must be called before the bot starts processing interactions.
+func RegisterCustomCommands(cfg *config.Config) {
+	customCommandMap = make(map[string]config.CustomCommandConfig, len(cfg.CustomCommands))
+	for _, cc := range cfg.CustomCommands {
+		if cc.Name != "" && cc.Message != "" {
+			customCommandMap[strings.ToLower(cc.Name)] = cc
+		}
+	}
+	log.Printf("[CustomCmd] Registered %d custom command(s)", len(customCommandMap))
 }
 
 func handleSlashCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -61,7 +97,7 @@ func handleSlashCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleWarnings(s, i)
 	case "clearwarnings":
 		handleClearWarnings(s, i)
-	case "purge":
+	case "purge", "clear":
 		handlePurge(s, i)
 	case "slowmode":
 		handleSlowmode(s, i)
@@ -102,6 +138,11 @@ func handleSlashCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleGiveawayCommand(s, i)
 
 	default:
+		// Check if it's a user-defined custom command.
+		if cc, ok := customCommandMap[name]; ok {
+			respond(s, i, resolveCustomPlaceholders(s, i, cc.Message), cc.Ephemeral)
+			return
+		}
 		log.Printf("Unknown command: %s", name)
 	}
 }
@@ -203,6 +244,28 @@ func optInt(m map[string]*discordgo.ApplicationCommandInteractionDataOption, key
 		return o.IntValue()
 	}
 	return def
+}
+
+// resolveCustomPlaceholders replaces Discord-native placeholders in a custom command message.
+//
+//	{user}         → mentions the user who ran the command
+//	{username}     → their Discord username
+//	{server}       → guild name
+//	{member_count} → number of members in the guild
+func resolveCustomPlaceholders(s *discordgo.Session, i *discordgo.InteractionCreate, msg string) string {
+	if i.Member == nil || i.Member.User == nil {
+		return msg
+	}
+
+	msg = strings.ReplaceAll(msg, "{user}", "<@"+i.Member.User.ID+">")
+	msg = strings.ReplaceAll(msg, "{username}", i.Member.User.Username)
+
+	if guild, err := s.Guild(i.GuildID); err == nil {
+		msg = strings.ReplaceAll(msg, "{server}", guild.Name)
+		msg = strings.ReplaceAll(msg, "{member_count}", strconv.Itoa(guild.MemberCount))
+	}
+
+	return msg
 }
 
 func hasConfigRole(s *discordgo.Session, guildID string, member *discordgo.Member, allowedNames []string) bool {

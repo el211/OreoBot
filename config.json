@@ -94,6 +94,7 @@
   "chat_bridge": {
     "enabled": false,
     "rabbitmq_uri": "",
+    "channel_id": "1483219330794782842",
     "mc_channel_id": "",
     "ban_sync": false,
     "mod_sync": false

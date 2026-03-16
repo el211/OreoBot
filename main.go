@@ -62,6 +62,7 @@ func main() {
 	handlers.RegisterWelcomeLeave(b.Session)
 	handlers.RegisterNoPing(b.Session, cfg)
 	handlers.RegisterCounting(b.Session, cfg)
+	handlers.RegisterCustomCommands(cfg)
 
 	if cfg.ChatBridge.Enabled {
 		bridge, err := handlers.NewChatBridge(b.Session, &cfg.ChatBridge)
